@@ -15,6 +15,7 @@ import {
   Layers,
   ArrowRight,
   ExternalLink,
+  Wifi,
 } from 'lucide-react';
 import { CAMPUS_BUILDINGS } from '../../lib/constants';
 import { useCCTVStore } from '../../store/cctvStore';
@@ -46,6 +47,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
   const [fps, setFps] = useState<number>(30);
   const [lastFrameTime, setLastFrameTime] = useState<string>('');
   const [cameraError, setCameraError] = useState<string>('');
+  const [frameCount, setFrameCount] = useState<number>(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -175,7 +177,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
     }
   }, [facingMode, isRegistered]);
 
-  // Frame Capture & Heartbeat Loop
+  // Fast Live Streaming Broadcast Loop (~600ms)
   useEffect(() => {
     if (!cameraActive || !isRegistered) return;
 
@@ -188,14 +190,16 @@ export const CCTVPhoneNodePage: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const base64 = canvas.toDataURL('image/jpeg', 0.8);
-          setLastFrameTime(new Date().toLocaleTimeString());
+          const base64 = canvas.toDataURL('image/jpeg', 0.75);
+          const timeStr = new Date().toLocaleTimeString();
+          setLastFrameTime(timeStr);
+          setFrameCount((prev) => prev + 1);
 
-          // Dispatch heartbeat to store & broadcast channel
+          // Broadcast high-speed frame update to main portal
           updatePhoneHeartbeat(nodeId, base64, batteryLevel, torchOn);
         }
       }
-    }, 2500);
+    }, 600);
 
     return () => clearInterval(interval);
   }, [cameraActive, isRegistered, nodeId, batteryLevel, torchOn]);
@@ -261,7 +265,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
             <div className="font-extrabold text-xs text-white tracking-tight flex items-center gap-1.5">
               <span>MIT ACSC CCTV Node</span>
               <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-mono font-bold">
-                PWA Active
+                Live Broadcast
               </span>
             </div>
             <div className="text-[10px] text-slate-400">Alandi Campus Light & Hazard Sensor</div>
@@ -294,7 +298,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
               <div className="w-14 h-14 rounded-2xl bg-maroon-900/60 border border-maroon-700 text-maroon-300 flex items-center justify-center mx-auto shadow-inner">
                 <Camera className="w-7 h-7" />
               </div>
-              <h2 className="text-xl font-black text-white">Register Phone as CCTV Node</h2>
+              <h2 className="text-xl font-black text-white">Register Phone as CCTV Camera</h2>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 Point this phone camera towards corridor ceiling LED lights or classroom fixtures to stream live feeds to the main AI portal.
               </p>
@@ -378,7 +382,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Classroom 101 Ceiling LED lights"
+                  placeholder="e.g. Classroom 101 Overhead LED lights"
                   value={areaDescription}
                   onChange={(e) => setAreaDescription(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white focus:border-maroon-500 focus:outline-none"
@@ -390,7 +394,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
                 className="w-full py-3.5 bg-maroon-800 hover:bg-maroon-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-maroon-900/30 transition text-sm active:scale-98"
               >
                 <Video className="w-5 h-5" />
-                <span>Start Camera & Connect Node</span>
+                <span>Start Camera & Broadcast Live Feed</span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </button>
             </form>
@@ -416,10 +420,10 @@ export const CCTVPhoneNodePage: React.FC = () => {
                   <div className="flex items-center gap-2 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/20">
                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
                     <span className="text-[11px] font-mono font-bold text-white uppercase">
-                      REC • LIVE
+                      REC • LIVE STREAM
                     </span>
                     <span className="text-white/40 font-mono">|</span>
-                    <span className="text-[10px] font-mono text-emerald-400">{fps} FPS</span>
+                    <span className="text-[10px] font-mono text-emerald-400">Frame #{frameCount}</span>
                   </div>
 
                   <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-mono text-white">
@@ -446,8 +450,8 @@ export const CCTVPhoneNodePage: React.FC = () => {
                   </div>
 
                   <div className="text-right text-[10px] font-mono text-slate-300">
-                    <div>LAST SYNC: {lastFrameTime || 'Streaming...'}</div>
-                    <div className="text-emerald-400">● CONNECTED TO MAIN PORTAL</div>
+                    <div>BROADCAST: {lastFrameTime || 'Streaming...'}</div>
+                    <div className="text-emerald-400 font-bold">● ACTIVE ON MAIN PORTAL</div>
                   </div>
                 </div>
               </div>
@@ -518,10 +522,10 @@ export const CCTVPhoneNodePage: React.FC = () => {
             <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl text-xs space-y-2">
               <div className="flex items-center gap-2 font-bold text-white">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Phone is Streaming to Main MIT ACSC CCTV Portal!</span>
+                <span>Broadcasting Live Stream to Main MIT ACSC Portal!</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Open <strong>CCTV LED Vision AI</strong> on your laptop/evaluator portal. This camera ({nodeId}) will appear live in the camera switcher list. You can trigger real-time <strong>Gemini 3.5 Flash Lite</strong> scans anytime from the main dashboard!
+                You can now view this camera's <strong>Live Full-Motion Video Feed</strong> on the main dashboard and click <strong>"Check LED Status (Gemini AI)"</strong> to run live Gemini 3.5 Flash Lite scans.
               </p>
             </div>
           </div>
