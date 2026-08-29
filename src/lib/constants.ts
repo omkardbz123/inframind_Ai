@@ -5,9 +5,9 @@ export const COLLEGE_CONFIG = {
   name: "MAEER's MIT Arts, Commerce & Science College (MIT ACSC), Alandi, Pune",
   shortName: 'MIT ACSC, Alandi',
   tagline: 'Affiliated to Savitribai Phule Pune University (SPPU) | Accredited with "A" Grade by NAAC',
-  domain: 'mitacsc.ac.in',
-  allowedDomains: ['mitacsc.ac.in', 'mitacsc.edu.in', 'college.edu', 'mit.edu', 'gmail.com'],
-  supportEmail: 'facilities@mitacsc.ac.in',
+  domain: 'mitacsc.edu.in',
+  allowedDomains: ['mitacsc.edu.in', 'mitacsc.ac.in', 'gmail.com'],
+  supportEmail: 'facilities@mitacsc.edu.in',
   emergencyHelpline: '+91 20 3025 3500',
   ambulanceHelpline: '108',
   fireHelpline: '101',
@@ -43,48 +43,39 @@ export const DEPARTMENTS: {
   },
   {
     id: 'technical',
-    name: 'Lab & Projector AV Tech',
+    name: 'Lab & IT Audio-Visual',
     icon: 'Monitor',
-    color: 'indigo',
-    description: 'Overhead classroom projectors, smart podiums, sound systems, lab PCs, and HDMI cables.',
-    managerName: 'Prof. Anjali Deshmukh (IT Infrastructure Head)',
-    subcategories: ['Projector Display / Bulb', 'Sound System & Mic', 'Smart Interactive Board', 'Lab PC Hardware', 'HDMI Cable / Switch', 'Podium Power'],
+    color: 'emerald',
+    description: 'Ceiling projectors, smart podiums, computer lab workstations, LAN switches, and PA speakers.',
+    managerName: 'Mr. Nitin Gore (Senior System & AV Administrator)',
+    subcategories: ['Ceiling Projector', 'Smart Board / Podium', 'Computer Lab PC', 'Wi-Fi / LAN Switch', 'Classroom PA Speaker', 'UPS Power Failure'],
   },
   {
     id: 'janitorial',
-    name: 'Janitorial & Sanitation',
+    name: 'Housekeeping & Cleanliness',
     icon: 'Sparkles',
-    color: 'emerald',
-    description: 'Classroom cleanliness, washroom sanitization, garbage bins, spills, and hygiene.',
-    managerName: 'Mrs. Rekha Jadhav (Sanitation Lead)',
-    subcategories: ['Classroom Floor Cleaning', 'Washroom Deep Clean', 'Garbage Bin Overflow', 'Liquid Spill Clean', 'Window Glass Clean', 'Dusting & Sanitizing'],
+    color: 'amber',
+    description: 'Classroom cleanliness, desk sanitization, washroom hygiene, waste bins, and water spill clearing.',
+    managerName: 'Mrs. Sunita Jadhav (Housekeeping Superintendent)',
+    subcategories: ['Classroom Dusting & Desks', 'Washroom Deep Cleaning', 'Floor Spill / Water Hazard', 'Dustbin Overflow', 'Window Glass Cleaning'],
   },
   {
     id: 'furniture',
-    name: 'Furniture & Carpentry',
-    icon: 'Armchair',
-    color: 'orange',
-    description: 'Student desks, teacher podiums, broken chairs, door latches, windows, and whiteboards.',
-    managerName: 'Mr. Dilip Pawar (Estate Carpentry Lead)',
-    subcategories: ['Student Desk / Bench', 'Teacher Chair / Desk', 'Door Handle / Lock', 'Window Glass / Latch', 'Green / White Board', 'Cupboard Drawer'],
-  },
-  {
-    id: 'network',
-    name: 'Campus Wi-Fi & LAN',
-    icon: 'Wifi',
-    color: 'cyan',
-    description: 'Campus Wi-Fi access points, computer lab LAN ports, switches, and internet gateways.',
-    managerName: 'Er. Vikas Mehta (Network Administrator)',
-    subcategories: ['Wi-Fi Access Point Down', 'Lab LAN Port Dead', 'Slow Internet Speed', 'Network Switch Failure', 'Router Reboot Request'],
+    name: 'Civil & Furniture Works',
+    icon: 'Hammer',
+    color: 'purple',
+    description: 'Door hinges, window latch, student bench repairs, floor tiles, and ceiling plaster inspection.',
+    managerName: 'Er. Sandeep Mane (Civil Infrastructure Engineer)',
+    subcategories: ['Door Handle / Lock', 'Broken Student Bench', 'Window Glass / Latch', 'Loose Floor Tile', 'Ceiling Crack / Leakage', 'Notice Board Repair'],
   },
 ];
 
 export const CAMPUS_BUILDINGS: BuildingInfo[] = [
   {
-    id: 'bldg-mit-main',
-    name: 'MIT ACSC Main Academic Building',
+    id: 'bld-mab',
+    name: 'Main Academic Building (MAB)',
     code: 'MAB',
-    totalRooms: 48,
+    totalRooms: 45,
     floors: [
       {
         floorNumber: 0,
@@ -92,11 +83,11 @@ export const CAMPUS_BUILDINGS: BuildingInfo[] = [
         wings: [
           {
             wing: 'east',
-            label: 'East Wing (Administration, Principal Secretariat & Admissions)',
+            label: 'East Wing (Administration & Admissions)',
             rooms: [
-              { number: '001', name: 'Principal Secretariat & Dean Office', type: 'office', capacity: 20 },
-              { number: '002', name: 'Student Facilitation & Examination Cell', type: 'office', capacity: 40 },
-              { number: '003', name: 'Central Campus Server Room', type: 'office', capacity: 10 },
+              { number: '001', name: 'Principal Office & Dean Secretariat', type: 'office' },
+              { number: '002', name: 'Student Admissions & Accounts Hall', type: 'office' },
+              { number: '003', name: 'Central Staff Room (Junior College)', type: 'office' },
               { number: '004', name: 'Ground Floor East Restroom (G-E-RR)', type: 'washroom' },
             ],
           },
@@ -162,11 +153,12 @@ export const CAMPUS_BUILDINGS: BuildingInfo[] = [
           },
           {
             wing: 'west',
-            label: 'West Wing (Animation & Multimedia Design)',
+            label: 'West Wing (Faculty Cabins & Meeting Rooms)',
             rooms: [
-              { number: '210', name: 'Animation & VFX Graphics Studio', type: 'lab', capacity: 40 },
-              { number: '211', name: 'UI/UX & Mobile Computing Lab', type: 'lab', capacity: 40 },
-              { number: '212', name: 'Classroom 212 (B.Sc Animation)', type: 'classroom', capacity: 60 },
+              { number: '210', name: 'Head of Department (Computer Science)', type: 'office' },
+              { number: '211', name: 'Faculty Cabin Complex A', type: 'office' },
+              { number: '212', name: 'IQAC & NAAC Quality Cell', type: 'office' },
+              { number: '214', name: '2nd Floor RO Cooler Station (2F-W-RO)', type: 'corridor' },
             ],
           },
         ],
@@ -174,21 +166,35 @@ export const CAMPUS_BUILDINGS: BuildingInfo[] = [
     ],
   },
   {
-    id: 'bldg-karad-tower',
-    name: 'Dr. Vishwanath Karad Research Center',
-    code: 'VRC',
-    totalRooms: 24,
+    id: 'bld-rnd',
+    name: 'Dr. Vishwanath Karad Research Tower',
+    code: 'RND',
+    totalRooms: 15,
     floors: [
       {
         floorNumber: 0,
         floorName: 'Ground Floor',
         wings: [
           {
-            wing: 'north',
-            label: 'North Wing (Central Knowledge Resource Library)',
+            wing: 'central',
+            label: 'Innovation Hub & Robotics Centre',
             rooms: [
-              { number: 'LIB-G1', name: 'Digital Reference & E-Journal Section', type: 'library', capacity: 200 },
-              { number: 'LIB-G2', name: 'Silent Reading Hall', type: 'library', capacity: 150 },
+              { number: 'R-001', name: 'Robotics & IoT Prototyping Lab', type: 'lab', capacity: 30 },
+              { number: 'R-002', name: 'Hardware Fabrication Workshop', type: 'lab', capacity: 25 },
+            ],
+          },
+        ],
+      },
+      {
+        floorNumber: 1,
+        floorName: '1st Floor',
+        wings: [
+          {
+            wing: 'central',
+            label: 'Central Digital Library & Reading Arena',
+            rooms: [
+              { number: 'LIB-1', name: 'Central Digital Knowledge Repository', type: 'library', capacity: 200 },
+              { number: 'LIB-2', name: 'Faculty Research Cubicles', type: 'library', capacity: 40 },
             ],
           },
         ],
@@ -197,10 +203,12 @@ export const CAMPUS_BUILDINGS: BuildingInfo[] = [
   },
 ];
 
+export const CAMPUS_LOCATIONS = CAMPUS_BUILDINGS;
+
 export const DEMO_USERS: UserProfile[] = [
   {
     uid: 'user-student-01',
-    email: 'omkar.student@mitacsc.ac.in',
+    email: '5454317@mitacsc.edu.in',
     displayName: 'Omkar Sharma',
     role: 'student',
     collegeId: 'MITACSC-2024-CS-089',
@@ -211,7 +219,7 @@ export const DEMO_USERS: UserProfile[] = [
   },
   {
     uid: 'user-teacher-01',
-    email: 'dr.deshpande@mitacsc.ac.in',
+    email: 'dr.deshpande@mitacsc.edu.in',
     displayName: 'Dr. Rajiv Deshpande (Prof. CS)',
     role: 'teacher',
     collegeId: 'MITACSC-FAC-042',
@@ -222,7 +230,7 @@ export const DEMO_USERS: UserProfile[] = [
   },
   {
     uid: 'user-electrician-01',
-    email: 'rajesh.electrician@mitacsc.ac.in',
+    email: 'rajesh.electrician@mitacsc.edu.in',
     displayName: 'Rajesh Kamble (Senior Electrician)',
     role: 'employee',
     department: 'electrical',
@@ -234,7 +242,7 @@ export const DEMO_USERS: UserProfile[] = [
   },
   {
     uid: 'user-plumber-01',
-    email: 'suresh.plumber@mitacsc.ac.in',
+    email: 'suresh.plumber@mitacsc.edu.in',
     displayName: 'Suresh Patil (Plumbing Tech)',
     role: 'employee',
     department: 'plumbing',
@@ -246,7 +254,7 @@ export const DEMO_USERS: UserProfile[] = [
   },
   {
     uid: 'user-tech-01',
-    email: 'nitin.avtech@mitacsc.ac.in',
+    email: 'nitin.avtech@mitacsc.edu.in',
     displayName: 'Nitin Gore (Audio-Visual & Lab Tech)',
     role: 'employee',
     department: 'technical',
@@ -258,7 +266,7 @@ export const DEMO_USERS: UserProfile[] = [
   },
   {
     uid: 'user-manager-01',
-    email: 'ramesh.manager@mitacsc.ac.in',
+    email: 'ramesh.manager@mitacsc.edu.in',
     displayName: 'Er. Ramesh Kulkarni (Facilities Manager)',
     role: 'manager',
     department: 'electrical',
@@ -270,7 +278,7 @@ export const DEMO_USERS: UserProfile[] = [
   },
   {
     uid: 'user-admin-01',
-    email: 'principal.admin@mitacsc.ac.in',
+    email: 'principal.admin@mitacsc.edu.in',
     displayName: 'Dr. B. B. Waphare (Principal & Dean)',
     role: 'admin',
     employeeId: 'ADM-PRIN-001',
