@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+cloudflared.exe
 
 # Environment variables & secrets
 .env
