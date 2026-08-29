@@ -14,6 +14,7 @@ import { AssetRegistry } from './pages/admin/AssetRegistry';
 import { CampusRiskMap } from './pages/admin/CampusRiskMap';
 import { AnalyticsReports } from './pages/admin/AnalyticsReports';
 import { UserDirectory } from './pages/admin/UserDirectory';
+import { CCTVPhoneNodePage } from './pages/cctv/CCTVPhoneNodePage';
 
 export function App() {
   return (
@@ -21,6 +22,10 @@ export function App() {
       <Routes>
         {/* Public Auth Route */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Dedicated Smartphone CCTV Node (Standalone PWA Webpage) */}
+        <Route path="/cctv-node" element={<CCTVPhoneNodePage />} />
+        <Route path="/cctv-cam" element={<CCTVPhoneNodePage />} />
 
         {/* Protected App Shell */}
         <Route element={<ProtectedRoute />}>

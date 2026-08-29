@@ -19,7 +19,7 @@ export interface CCTVSnapshotRecord {
 
 export interface CCTVCamera {
   id: string;
-  name: string; // e.g. "CAM-MAB-2F-CORRIDOR-E"
+  name: string; // e.g. "CAM-MAB-2F-CORRIDOR-E" or "CAM-PHONE-OMKAR-01"
   building: string;
   floor: number;
   wing: WingType;
@@ -36,6 +36,14 @@ export interface CCTVCamera {
   lastAnalysisResult: CCTVAnalysisResult;
   consecutiveFailures: number;
   electricityGridActive: boolean;
+
+  // Phone CCTV Node Specifics
+  isPhoneNode?: boolean;
+  deviceBattery?: number;
+  lastHeartbeat?: string;
+  isLiveStreaming?: boolean;
+  torchOn?: boolean;
+  resolution?: string;
 
   // History
   snapshots: CCTVSnapshotRecord[];

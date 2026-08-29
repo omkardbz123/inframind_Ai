@@ -8,10 +8,17 @@ import {
   AlertTriangle,
   CheckCircle2,
   Camera,
+  Smartphone,
+  QrCode,
+  ExternalLink,
+  Battery,
+  Layers,
+  ChevronDown,
 } from 'lucide-react';
 import { useCCTVStore } from '../../store/cctvStore';
 import { useAuthStore } from '../../store/authStore';
 import { CCTVCamera } from '../../types/cctv';
+import { QRCodeSVG } from 'qrcode.react';
 
 export const CCTVMonitoring: React.FC = () => {
   const {
@@ -28,6 +35,7 @@ export const CCTVMonitoring: React.FC = () => {
   const { customGeminiApiKey } = useAuthStore();
   const [sliderPos, setSliderPos] = useState(50);
   const [lastAnalyzedResult, setLastAnalyzedResult] = useState<any>(null);
+  const [isPairModalOpen, setIsPairModalOpen] = useState(false);
 
   const selectedCam: CCTVCamera =
     cameras.find((c) => c.id === selectedCameraId) || cameras[0];
@@ -41,6 +49,8 @@ export const CCTVMonitoring: React.FC = () => {
     }
   };
 
+  const phoneNodeUrl = `${window.location.origin}/cctv-node`;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -49,32 +59,41 @@ export const CCTVMonitoring: React.FC = () => {
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             Automated CCTV Night LED Vision AI
             <span className="px-2.5 py-0.5 bg-maroon-50 text-maroon-800 text-xs font-mono font-bold rounded-md border border-maroon-200">
-              Gemini 2.0 Flash
+              Gemini 3.5 Flash Lite
             </span>
           </h2>
           <p className="text-xs text-slate-500">
-            Per-hour night inspection comparing baseline photos (lights ON) against live corridor feeds with electricity grid correlation
+            Real-time inspection of campus corridor & classroom lighting using fixed cameras and connected smartphone CCTV nodes
           </p>
         </div>
 
-        {/* Electricity Grid Switcher */}
-        <div className="flex items-center gap-2 p-1.5 bg-white border border-slate-200 rounded-2xl shadow-xs">
-          <div className="text-xs font-semibold text-slate-700 px-2 flex items-center gap-1.5">
-            <Zap className={`w-4 h-4 ${activeElectricityGrid ? 'text-amber-500' : 'text-slate-400'}`} />
-            <span>Campus Grid:</span>
-          </div>
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Pair Phone Button */}
           <button
             type="button"
-            onClick={() => toggleElectricityGrid()}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
-              activeElectricityGrid
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-rose-600 text-white shadow-xs'
-            }`}
+            onClick={() => setIsPairModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-maroon-800 hover:bg-maroon-900 text-white flex items-center gap-1.5 shadow-sm transition active:scale-95"
           >
-            <Power className="w-3.5 h-3.5" />
-            <span>{activeElectricityGrid ? 'MAINS ACTIVE (ON)' : 'POWER CUT (OFF)'}</span>
+            <Smartphone className="w-4 h-4" />
+            <span>Connect Phone CCTV</span>
           </button>
+
+          {/* Power Option Dropdown Menu */}
+          <div className="relative inline-flex items-center">
+            <select
+              value={activeElectricityGrid ? 'on' : 'off'}
+              onChange={(e) => toggleElectricityGrid(e.target.value === 'on')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer focus:outline-none ${
+                activeElectricityGrid
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-rose-50 text-rose-800 border-rose-300'
+              }`}
+            >
+              <option value="on">⚡ Power: Mains Active (ON)</option>
+              <option value="off">🔌 Power: Power Outage (OFF)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -82,11 +101,16 @@ export const CCTVMonitoring: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left 4 Cols: Cameras List */}
         <div className="lg:col-span-4 space-y-3">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Active CCTV Corridor Nodes:
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Active CCTV Corridor & Phone Nodes:
+            </h3>
+            <span className="text-[11px] font-mono text-slate-400">
+              {cameras.length} Connected
+            </span>
+          </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
             {cameras.map((cam) => {
               const isSelected = cam.id === selectedCam.id;
               const hasFailure = cam.lastAnalysisResult === 'failure_detected';
@@ -100,14 +124,24 @@ export const CCTVMonitoring: React.FC = () => {
                   }}
                   className={`w-full p-3.5 rounded-2xl text-left border transition-all ${
                     isSelected
-                      ? 'bg-maroon-50 border-maroon-800 shadow-sm'
+                      ? 'bg-maroon-50 border-maroon-800 shadow-sm ring-2 ring-maroon-800/10'
                       : 'bg-white border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-xs font-bold text-maroon-900">{cam.name}</span>
+                    <div className="flex items-center gap-1.5 truncate">
+                      {cam.isPhoneNode ? (
+                        <Smartphone className="w-3.5 h-3.5 text-maroon-700 shrink-0" />
+                      ) : (
+                        <Video className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      )}
+                      <span className="font-mono text-xs font-bold text-maroon-900 truncate">
+                        {cam.name}
+                      </span>
+                    </div>
+
                     <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                      className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold border shrink-0 ${
                         hasFailure
                           ? 'bg-rose-50 text-rose-700 border-rose-200'
                           : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -118,11 +152,21 @@ export const CCTVMonitoring: React.FC = () => {
                   </div>
 
                   <div className="font-bold text-xs text-slate-900">{cam.areaDescription}</div>
-                  <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
-                    <span>Floor {cam.floor} ({cam.wing.toUpperCase()} Wing)</span>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {cam.snapshots.length} Scans Logged
+
+                  <div className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-between">
+                    <span>
+                      Floor {cam.floor} ({cam.wing.toUpperCase()} Wing)
                     </span>
+                    {cam.isPhoneNode ? (
+                      <span className="text-[10px] font-mono text-emerald-600 font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        LIVE PHONE FEED
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {cam.snapshots.length} Scans Logged
+                      </span>
+                    )}
                   </div>
                 </button>
               );
@@ -133,89 +177,91 @@ export const CCTVMonitoring: React.FC = () => {
           <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
             <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-maroon-700" />
-              <span>Simulate Night Inspection Scenarios:</span>
+              <span>Simulate Preset Fault Scenarios:</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => setPresetScenario(selectedCam.id, 'all_ok')}
-                className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-left transition"
+                className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 font-medium text-slate-700 text-left transition"
               >
-                <div className="font-bold text-emerald-700">All 8 LEDs OK</div>
-                <div className="text-[10px] text-slate-500">Normal lumen</div>
+                ✅ All LEDs Operational
               </button>
               <button
                 type="button"
                 onClick={() => setPresetScenario(selectedCam.id, 'two_leds_dead')}
-                className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-left transition"
+                className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 font-medium text-rose-800 text-left transition"
               >
-                <div className="font-bold text-rose-700">2 LEDs Failed</div>
-                <div className="text-[10px] text-slate-500">Defect detected</div>
+                🚨 2 Corridor LEDs Dead
               </button>
               <button
                 type="button"
                 onClick={() => setPresetScenario(selectedCam.id, 'flicker_dim')}
-                className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-left transition"
+                className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 font-medium text-amber-800 text-left transition"
               >
-                <div className="font-bold text-amber-800">Flicker Dim</div>
-                <div className="text-[10px] text-slate-500">65% lumen drop</div>
+                ⚠️ High Flicker / Dim 65%
               </button>
               <button
                 type="button"
                 onClick={() => setPresetScenario(selectedCam.id, 'power_cut')}
-                className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-left transition"
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-left transition"
               >
-                <div className="font-bold text-slate-700">Total Blackout</div>
-                <div className="text-[10px] text-slate-500">Grid power cut</div>
+                🔌 Complete Power Blackout
               </button>
             </div>
           </div>
         </div>
 
-        {/* Right 8 Cols: Interactive Visual Comparator */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="white-card p-5 rounded-3xl space-y-4">
+        {/* Right 8 Cols: Live Interactive Vision Comparator & Analysis */}
+        <div className="lg:col-span-8 space-y-5">
+          <div className="white-card p-5 sm:p-6 rounded-3xl space-y-4 shadow-sm border border-slate-200">
+            {/* Viewfinder Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-maroon-700" />
-                  <span>{selectedCam.name} — Comparative Visual Stream</span>
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
+                    {selectedCam.name}
+                  </h3>
+                  {selectedCam.isPhoneNode && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                      Active Phone Node
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-500">{selectedCam.areaDescription}</p>
               </div>
 
-              {/* Run Gemini Button */}
+              {/* Gemini Trigger Button */}
               <button
-                onClick={handleRunAnalysis}
+                type="button"
                 disabled={isAnalyzing}
-                className="px-4 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition"
+                onClick={handleRunAnalysis}
+                className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition active:scale-95 disabled:opacity-50"
               >
                 {isAnalyzing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Gemini AI Inspecting...</span>
-                  </>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>Run Gemini AI Inspection</span>
-                  </>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
                 )}
+                <span>
+                  {isAnalyzing ? 'Gemini AI Scanning...' : 'Check LED Status (Gemini AI)'}
+                </span>
               </button>
             </div>
 
-            {/* Split Comparison Frame */}
-            <div className="relative aspect-video rounded-2xl overflow-hidden border border-slate-300 bg-slate-900">
-              {/* Reference Image (Left Base) */}
+            {/* Split Screen Image Slider */}
+            <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-inner border border-slate-800 select-none">
+              {/* Reference Image (Baseline ON) */}
               <img
                 src={selectedCam.referenceImageURL}
                 alt="Baseline Reference"
-                className="absolute inset-0 w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
               />
 
-              {/* Current Night Snapshot Overlay */}
+              {/* Current Live Snapshot with Clip Path */}
               <div
-                className="absolute inset-0 overflow-hidden"
+                className="absolute inset-0 overflow-hidden pointer-events-none"
                 style={{ clipPath: `inset(0 0 0 ${sliderPos}%)` }}
               >
                 <img
@@ -225,113 +271,164 @@ export const CCTVMonitoring: React.FC = () => {
                 />
               </div>
 
-              {/* Slider Divider Bar */}
+              {/* Overlay Badges */}
+              <div className="absolute top-3 left-3 px-2.5 py-1 bg-slate-900/80 backdrop-blur-md rounded-lg text-[10px] font-mono font-bold text-white border border-white/20">
+                BASELINE CALIBRATION (LIGHTS ON)
+              </div>
+              <div className="absolute top-3 right-3 px-2.5 py-1 bg-maroon-950/80 backdrop-blur-md rounded-lg text-[10px] font-mono font-bold text-amber-300 border border-amber-500/30">
+                LIVE CAPTURE (TONIGHT)
+              </div>
+
+              {/* Slider Line Divider */}
               <div
-                className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize shadow-2xl z-10"
+                className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg pointer-events-none"
                 style={{ left: `${sliderPos}%` }}
               >
-                <div className="absolute top-1/2 -translate-y-1/2 -left-3 w-7 h-7 bg-white text-maroon-900 rounded-full flex items-center justify-center shadow-md font-bold text-xs">
+                <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-white text-maroon-900 flex items-center justify-center shadow-lg border border-slate-300 text-xs font-bold">
                   ↔
                 </div>
               </div>
 
-              {/* Badges on Corners */}
-              <div className="absolute top-3 left-3 px-2.5 py-1 bg-white/90 backdrop-blur-xs rounded-lg border border-slate-200 text-[11px] font-mono text-emerald-800 font-bold shadow-xs">
-                BASELINE: Lights ON
-              </div>
-              <div className="absolute top-3 right-3 px-2.5 py-1 bg-white/90 backdrop-blur-xs rounded-lg border border-slate-200 text-[11px] font-mono text-maroon-900 font-bold shadow-xs">
-                NIGHT LIVE FEED
-              </div>
-            </div>
-
-            {/* Range Slider */}
-            <div className="flex items-center gap-3 px-2">
-              <span className="text-xs text-emerald-800 font-bold">100% Baseline</span>
+              {/* Transparent Slider Range Input */}
               <input
                 type="range"
                 min="0"
                 max="100"
                 value={sliderPos}
                 onChange={(e) => setSliderPos(Number(e.target.value))}
-                className="flex-1 accent-maroon-800 h-2 bg-slate-200 rounded-lg cursor-pointer"
+                className="absolute inset-0 opacity-0 cursor-ew-resize w-full h-full"
               />
-              <span className="text-xs text-maroon-800 font-bold">100% Night Feed</span>
             </div>
-          </div>
 
-          {/* AI Inspection Verdict Panel */}
-          {lastAnalyzedResult && (
-            <div
-              className={`p-5 rounded-3xl border animate-in slide-in-from-bottom-2 duration-150 ${
-                lastAnalyzedResult.analysisResult === 'failure_detected'
-                  ? 'bg-rose-50 border-rose-300 shadow-sm'
-                  : lastAnalyzedResult.analysisResult === 'power_outage'
-                  ? 'bg-amber-50 border-amber-300'
-                  : 'bg-emerald-50 border-emerald-300'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`p-3 rounded-2xl ${
-                      lastAnalyzedResult.analysisResult === 'failure_detected'
-                        ? 'bg-rose-100 text-rose-700'
-                        : 'bg-emerald-100 text-emerald-700'
-                    }`}
-                  >
-                    {lastAnalyzedResult.analysisResult === 'failure_detected' ? (
-                      <AlertTriangle className="w-6 h-6" />
+            <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono">
+              <span>← Drag slider left/right to compare baseline vs night snapshot</span>
+              <span>Position: {sliderPos}%</span>
+            </div>
+
+            {/* Analysis Result Box */}
+            {lastAnalyzedResult && (
+              <div className="p-4 sm:p-5 rounded-2xl border bg-slate-50 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    {lastAnalyzedResult.analysisResult === 'all_ok' ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    ) : lastAnalyzedResult.analysisResult === 'power_outage' ? (
+                      <Power className="w-5 h-5 text-slate-600 shrink-0" />
                     ) : (
-                      <CheckCircle2 className="w-6 h-6" />
+                      <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
                     )}
+                    <span className="font-extrabold text-sm text-slate-900 uppercase">
+                      Analysis: {lastAnalyzedResult.analysisResult.replace('_', ' ')}
+                    </span>
                   </div>
-                  <div>
-                    <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600">
-                      Gemini 2.0 Flash AI Verdict:
-                    </div>
-                    <h4 className="text-base font-extrabold text-slate-900 capitalize mt-0.5">
-                      {lastAnalyzedResult.analysisResult.replace('_', ' ')} (Confidence: {Math.round(lastAnalyzedResult.confidenceScore * 100)}%)
-                    </h4>
+
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-mono text-[10px] font-bold">
+                      Confidence: {Math.round(lastAnalyzedResult.confidenceScore * 100)}%
+                    </span>
+                    <span className="px-2 py-0.5 bg-maroon-800 text-white rounded font-mono text-[10px] font-bold">
+                      Gemini 3.5 Flash Lite
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                    <div className="text-[10px] text-slate-500 font-semibold">Total Visible LEDs</div>
+                    <div className="text-lg font-black text-slate-900">{lastAnalyzedResult.totalLEDsVisible}</div>
+                  </div>
+                  <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <div className="text-[10px] text-emerald-700 font-semibold">Operational</div>
+                    <div className="text-lg font-black text-emerald-700">{lastAnalyzedResult.workingLEDs}</div>
+                  </div>
+                  <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200">
+                    <div className="text-[10px] text-rose-700 font-semibold">Failed / Unlit</div>
+                    <div className="text-lg font-black text-rose-700">{lastAnalyzedResult.failedLEDs}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-xs">
+                  <div className="font-bold text-slate-800">Detected Issues:</div>
+                  <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                    {lastAnalyzedResult.detectedIssues.map((issue: string, idx: number) => (
+                      <li key={idx}>{issue}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
+                  <div className="font-bold text-maroon-900">Gemini 3.5 Flash Lite Recommendation:</div>
+                  <div className="text-slate-600 leading-relaxed">
+                    {lastAnalyzedResult.geminiExplanation}
                   </div>
                 </div>
 
                 {lastAnalyzedResult.autoTicketId && (
-                  <div className="px-3 py-1.5 bg-rose-100 border border-rose-300 rounded-xl text-xs text-rose-800 font-bold font-mono">
-                    Auto-Ticket: #{lastAnalyzedResult.autoTicketId}
+                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs text-emerald-800">
+                    <div className="font-bold">
+                      Work Order Auto-Generated: #{lastAnalyzedResult.autoTicketId}
+                    </div>
+                    <span className="font-semibold text-[11px]">Dispatched to Electrical Team</span>
                   </div>
                 )}
               </div>
-
-              <div className="mt-4 grid grid-cols-3 gap-2.5 text-xs">
-                <div className="p-3 bg-white rounded-xl border border-slate-200">
-                  <div className="text-slate-500 text-[10px]">Total Visible:</div>
-                  <div className="font-bold text-slate-900 text-sm">{lastAnalyzedResult.totalLEDsVisible} Fixtures</div>
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-slate-200">
-                  <div className="text-slate-500 text-[10px]">Working:</div>
-                  <div className="font-bold text-emerald-700 text-sm">{lastAnalyzedResult.workingLEDs} ON</div>
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-slate-200">
-                  <div className="text-slate-500 text-[10px]">Failed / Dim:</div>
-                  <div className="font-bold text-rose-700 text-sm">{lastAnalyzedResult.failedLEDs} Dark</div>
-                </div>
-              </div>
-
-              <div className="mt-3 p-3.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
-                <div className="font-bold text-slate-900">AI Diagnostic Explanation:</div>
-                <p className="text-slate-600 leading-relaxed">{lastAnalyzedResult.geminiExplanation}</p>
-                {lastAnalyzedResult.detectedIssues?.length > 0 && (
-                  <ul className="list-disc list-inside text-rose-700 space-y-0.5 pt-1 font-medium">
-                    {lastAnalyzedResult.detectedIssues.map((iss: string, idx: number) => (
-                      <li key={idx}>{iss}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
+
+      {/* QR Code Phone Pairing Modal */}
+      {isPairModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 space-y-5 text-center">
+            <button
+              onClick={() => setIsPairModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-900 rounded-xl"
+            >
+              ✕
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-maroon-50 text-maroon-800 flex items-center justify-center mx-auto ring-4 ring-maroon-100">
+              <Smartphone className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-900">
+                Turn Smartphone into CCTV Camera Node
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Scan this QR code with your phone camera to launch the installable CCTV Node web app.
+              </p>
+            </div>
+
+            {/* QR Code Box */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl inline-block mx-auto shadow-inner">
+              <QRCodeSVG value={phoneNodeUrl} size={180} />
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="font-mono text-slate-600 bg-slate-100 p-2 rounded-xl truncate">
+                {phoneNodeUrl}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Point phone camera at corridor or classroom lights to stream live frames to this dashboard.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <a
+                href="/cctv-node"
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
+              >
+                <span>Open in New Tab</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

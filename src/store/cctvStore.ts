@@ -19,21 +19,35 @@ interface CCTVStoreState {
     cameraId: string,
     scenario: 'all_ok' | 'two_leds_dead' | 'flicker_dim' | 'power_cut'
   ) => void;
+
+  // Phone CCTV Node Management
+  registerPhoneNode: (cameraData: Partial<CCTVCamera>) => CCTVCamera;
+  updatePhoneHeartbeat: (
+    cameraId: string,
+    snapshotBase64?: string,
+    battery?: number,
+    torch?: boolean
+  ) => void;
+  removeCamera: (cameraId: string) => void;
 }
 
 const STORAGE_CCTV_KEY = 'campuscare_cctv_store';
 
 // High quality sample images for reference & night comparison
-const REF_CORRIDOR_ON = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80'; // Bright illuminated corridor
-const CURRENT_CORRIDOR_DEFECT = 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80'; // Dim/dark segment corridor
-const CURRENT_CORRIDOR_OK = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80';
-const CURRENT_BLACKOUT = 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80'; // Pitch dark
+const REF_CORRIDOR_ON =
+  'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80'; // Bright illuminated corridor
+const CURRENT_CORRIDOR_DEFECT =
+  'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80'; // Dim/dark segment corridor
+const CURRENT_CORRIDOR_OK =
+  'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80';
+const CURRENT_BLACKOUT =
+  'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80'; // Pitch dark
 
 const INITIAL_CAMERAS: CCTVCamera[] = [
   {
     id: 'CAM-MAB-2F-EAST-01',
-    name: 'CAM-MAB-2F-EAST-01',
-    building: 'Main Academic Block (MAB)',
+    name: 'CAM-MAB-2F-EAST-01 (Corridor Ceiling)',
+    building: 'Main Academic Building (MAB)',
     floor: 2,
     wing: 'east',
     areaDescription: '2nd Floor East Corridor (Overhead Rooms 201-208)',
@@ -45,6 +59,7 @@ const INITIAL_CAMERAS: CCTVCamera[] = [
     lastAnalysisResult: 'failure_detected',
     consecutiveFailures: 2,
     electricityGridActive: true,
+    isPhoneNode: false,
     snapshots: [
       {
         id: 'snap-1',
@@ -60,15 +75,16 @@ const INITIAL_CAMERAS: CCTVCamera[] = [
           'LED Fixture #7 shows severe lumen drop (65% below baseline).',
         ],
         electricityStatus: 'on',
-        geminiExplanation: 'Comparison against baseline confirms localized electrical driver failure in East corridor fixtures while building grid remains powered.',
+        geminiExplanation:
+          'Comparison against baseline confirms localized electrical driver failure in East corridor fixtures while building grid remains powered.',
         autoTicketId: 'T-2026-0104',
       },
     ],
   },
   {
     id: 'CAM-MAB-0F-ATRIUM-02',
-    name: 'CAM-MAB-0F-ATRIUM-02',
-    building: 'Main Academic Block (MAB)',
+    name: 'CAM-MAB-0F-ATRIUM-02 (Central Lobby)',
+    building: 'Main Academic Building (MAB)',
     floor: 0,
     wing: 'central',
     areaDescription: 'Ground Floor Central Atrium & Auditorium Lobby',
@@ -80,6 +96,7 @@ const INITIAL_CAMERAS: CCTVCamera[] = [
     lastAnalysisResult: 'all_ok',
     consecutiveFailures: 0,
     electricityGridActive: true,
+    isPhoneNode: false,
     snapshots: [
       {
         id: 'snap-2',
@@ -97,23 +114,37 @@ const INITIAL_CAMERAS: CCTVCamera[] = [
     ],
   },
   {
-    id: 'CAM-SRT-1F-LIB-03',
-    name: 'CAM-SRT-1F-LIB-03',
-    building: 'Science & Research Tower (SRT)',
+    id: 'CAM-PHONE-LIVE-DEMO',
+    name: '📱 Phone CCTV Node #1 (Classroom 101)',
+    building: 'Main Academic Building (MAB)',
     floor: 1,
-    wing: 'north',
-    areaDescription: 'Central Digital Reference Library Walkway',
+    wing: 'east',
+    areaDescription: 'Classroom 101 Ceiling LED Array & Projector Screen',
     referenceImageURL: REF_CORRIDOR_ON,
     referenceImageTimestamp: '2026-08-20T19:00:00Z',
     currentSnapshotURL: CURRENT_CORRIDOR_OK,
     currentSnapshotTimestamp: new Date().toISOString(),
     isActive: true,
+    isPhoneNode: true,
+    isLiveStreaming: true,
+    deviceBattery: 88,
+    lastHeartbeat: new Date().toISOString(),
     lastAnalysisResult: 'all_ok',
     consecutiveFailures: 0,
     electricityGridActive: true,
     snapshots: [],
   },
 ];
+
+// Setup Broadcast Channel for Cross-Tab / Cross-Device Phone Sync
+let syncChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    syncChannel = new BroadcastChannel('campuscare_cctv_sync');
+  }
+} catch {
+  // BroadcastChannel fallback
+}
 
 export const useCCTVStore = create<CCTVStoreState>((set, get) => {
   let initial = INITIAL_CAMERAS;
@@ -127,8 +158,34 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
   }
 
   const persist = (cameras: CCTVCamera[]) => {
-    localStorage.setItem(STORAGE_CCTV_KEY, JSON.stringify(cameras));
+    try {
+      localStorage.setItem(STORAGE_CCTV_KEY, JSON.stringify(cameras));
+    } catch {
+      // Storage quota safety
+    }
   };
+
+  // Listen for broadcast sync messages
+  if (syncChannel) {
+    syncChannel.onmessage = (event) => {
+      const { type, payload } = event.data || {};
+      if (type === 'REGISTER_PHONE' || type === 'UPDATE_HEARTBEAT') {
+        const state = get();
+        const existingIdx = state.cameras.findIndex((c) => c.id === payload.id);
+        let updated: CCTVCamera[];
+        if (existingIdx >= 0) {
+          updated = [...state.cameras];
+          updated[existingIdx] = { ...updated[existingIdx], ...payload };
+        } else {
+          updated = [payload, ...state.cameras];
+        }
+        set({ cameras: updated });
+        persist(updated);
+      } else if (type === 'GRID_TOGGLE') {
+        set({ activeElectricityGrid: payload.gridActive });
+      }
+    };
+  }
 
   return {
     cameras: initial,
@@ -146,8 +203,103 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
           electricityGridActive: next,
         }));
         persist(updatedCameras);
+
+        if (syncChannel) {
+          syncChannel.postMessage({
+            type: 'GRID_TOGGLE',
+            payload: { gridActive: next },
+          });
+        }
+
         return { activeElectricityGrid: next, cameras: updatedCameras };
       });
+    },
+
+    registerPhoneNode: (cameraData: Partial<CCTVCamera>) => {
+      const state = get();
+      const newId = cameraData.id || `CAM-PHONE-${Math.floor(100 + Math.random() * 900)}`;
+
+      const phoneCamera: CCTVCamera = {
+        id: newId,
+        name: cameraData.name || `📱 Smartphone Node (${newId})`,
+        building: cameraData.building || 'Main Academic Building (MAB)',
+        floor: cameraData.floor ?? 1,
+        wing: cameraData.wing || 'east',
+        areaDescription: cameraData.areaDescription || 'Classroom / Corridor Light Sensor',
+        referenceImageURL: cameraData.referenceImageURL || REF_CORRIDOR_ON,
+        referenceImageTimestamp: new Date().toISOString(),
+        currentSnapshotURL: cameraData.currentSnapshotURL || CURRENT_CORRIDOR_OK,
+        currentSnapshotTimestamp: new Date().toISOString(),
+        isActive: true,
+        isPhoneNode: true,
+        isLiveStreaming: true,
+        deviceBattery: cameraData.deviceBattery ?? 92,
+        lastHeartbeat: new Date().toISOString(),
+        lastAnalysisResult: 'all_ok',
+        consecutiveFailures: 0,
+        electricityGridActive: state.activeElectricityGrid,
+        snapshots: [],
+      };
+
+      const filtered = state.cameras.filter((c) => c.id !== newId);
+      const updated = [phoneCamera, ...filtered];
+
+      set({ cameras: updated, selectedCameraId: newId });
+      persist(updated);
+
+      if (syncChannel) {
+        syncChannel.postMessage({
+          type: 'REGISTER_PHONE',
+          payload: phoneCamera,
+        });
+      }
+
+      return phoneCamera;
+    },
+
+    updatePhoneHeartbeat: (cameraId, snapshotBase64, battery, torch) => {
+      const state = get();
+      const updated = state.cameras.map((c) => {
+        if (c.id === cameraId) {
+          return {
+            ...c,
+            currentSnapshotURL: snapshotBase64 || c.currentSnapshotURL,
+            currentSnapshotTimestamp: new Date().toISOString(),
+            lastHeartbeat: new Date().toISOString(),
+            isLiveStreaming: true,
+            isActive: true,
+            deviceBattery: battery !== undefined ? battery : c.deviceBattery,
+            torchOn: torch !== undefined ? torch : c.torchOn,
+          };
+        }
+        return c;
+      });
+
+      set({ cameras: updated });
+      persist(updated);
+
+      if (syncChannel) {
+        syncChannel.postMessage({
+          type: 'UPDATE_HEARTBEAT',
+          payload: {
+            id: cameraId,
+            currentSnapshotURL: snapshotBase64,
+            deviceBattery: battery,
+            torchOn: torch,
+            lastHeartbeat: new Date().toISOString(),
+          },
+        });
+      }
+    },
+
+    removeCamera: (cameraId: string) => {
+      const state = get();
+      const updated = state.cameras.filter((c) => c.id !== cameraId);
+      set({
+        cameras: updated,
+        selectedCameraId: updated[0]?.id || '',
+      });
+      persist(updated);
     },
 
     setPresetScenario: (cameraId, scenario) => {
@@ -202,10 +354,11 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
       set({ isAnalyzing: true });
 
       try {
+        const isGridOn = state.activeElectricityGrid && camera.electricityGridActive;
         const result = await compareCCTVImagesWithGemini(
           camera.referenceImageURL,
           camera.currentSnapshotURL,
-          state.activeElectricityGrid && camera.electricityGridActive,
+          isGridOn,
           {
             building: camera.building,
             floor: camera.floor,
@@ -217,7 +370,7 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
 
         let autoTicketId: string | undefined = undefined;
 
-        // If failure detected and consecutive count is at least 1, create auto work order
+        // If failure detected, create auto work order
         if (result.status === 'failure_detected') {
           const ticketStore = useTicketStore.getState();
           const autoTicket = await ticketStore.createTicket({
@@ -232,11 +385,11 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
             locationDescription: camera.areaDescription,
             reporterId: 'system-cctv-ai',
             reporterName: `CCTV Node (${camera.name})`,
-            reporterEmail: 'cctv.ai@college.edu',
+            reporterEmail: 'facilities.electrical@mitacsc.edu.in',
             reporterRole: 'Automated AI Monitor',
             isAutoDetected: true,
             source: 'cctv',
-            aiAnalysis: `Gemini 2.0 Flash Confidence: ${Math.round(result.confidence * 100)}%. ${result.recommendation}`,
+            aiAnalysis: `Gemini 3.5 Flash Lite Confidence: ${Math.round(result.confidence * 100)}%. ${result.recommendation}`,
             urgencyScore: 88,
           });
 
@@ -244,7 +397,7 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
 
           // Dispatch email alert to Electrical dept head & Admin
           sendTransactionalEmail({
-            to: 'facilities.electrical@college.edu',
+            to: 'facilities.electrical@mitacsc.edu.in',
             subject: `🚨 [CCTV AI Alert] LED Failure in ${camera.areaDescription} (Ticket #${autoTicket.id})`,
             template: 'LEDFailureAlert',
             ticket: autoTicket,
