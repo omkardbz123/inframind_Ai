@@ -19,6 +19,7 @@ import {
   Radio,
   Play,
   Activity,
+  HelpCircle,
 } from 'lucide-react';
 import { useCCTVStore } from '../../store/cctvStore';
 import { useAuthStore } from '../../store/authStore';
@@ -440,7 +441,7 @@ export const CCTVMonitoring: React.FC = () => {
                       <Sparkles className="w-4 h-4 text-amber-300" />
                     )}
                     <span>
-                      {isAnalyzing ? 'Analyzing...' : 'Check LED Status'}
+                      {isAnalyzing ? 'Analyzing Image...' : 'Check LED Status (Gemini AI)'}
                     </span>
                   </button>
                 </div>
@@ -564,7 +565,9 @@ export const CCTVMonitoring: React.FC = () => {
                 <div className="p-4 sm:p-5 rounded-2xl border bg-slate-50 space-y-3 animate-in fade-in zoom-in-95 duration-200">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
                     <div className="flex items-center gap-2">
-                      {lastAnalyzedResult.analysisResult === 'all_ok' ? (
+                      {lastAnalyzedResult.totalLEDsVisible === 0 ? (
+                        <HelpCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                      ) : lastAnalyzedResult.analysisResult === 'all_ok' ? (
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                       ) : lastAnalyzedResult.analysisResult === 'power_outage' ? (
                         <Power className="w-5 h-5 text-slate-600 shrink-0" />
@@ -572,7 +575,9 @@ export const CCTVMonitoring: React.FC = () => {
                         <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
                       )}
                       <span className="font-extrabold text-sm text-slate-900 uppercase">
-                        Diagnosis: {lastAnalyzedResult.analysisResult.replace('_', ' ')}
+                        {lastAnalyzedResult.totalLEDsVisible === 0
+                          ? 'DIAGNOSIS: NO LIGHTS DETECTED IN CAMERA VIEW'
+                          : `DIAGNOSIS: ${lastAnalyzedResult.analysisResult.replace('_', ' ')}`}
                       </span>
                     </div>
 
@@ -586,6 +591,7 @@ export const CCTVMonitoring: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* 3 Metric Pills */}
                   <div className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="p-2.5 bg-white rounded-xl border border-slate-200">
                       <div className="text-[10px] text-slate-500 font-semibold">Total Visible LEDs</div>
@@ -595,9 +601,15 @@ export const CCTVMonitoring: React.FC = () => {
                       <div className="text-[10px] text-emerald-700 font-semibold">Operational</div>
                       <div className="text-lg font-black text-emerald-700">{lastAnalyzedResult.workingLEDs}</div>
                     </div>
-                    <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200">
-                      <div className="text-[10px] text-rose-700 font-semibold">Failed / Unlit</div>
-                      <div className="text-lg font-black text-rose-700">{lastAnalyzedResult.failedLEDs}</div>
+                    <div
+                      className={`p-2.5 rounded-xl border ${
+                        lastAnalyzedResult.failedLEDs > 0
+                          ? 'bg-rose-50 border-rose-200 text-rose-700'
+                          : 'bg-slate-100 border-slate-200 text-slate-500'
+                      }`}
+                    >
+                      <div className="text-[10px] font-semibold">Failed / Unlit</div>
+                      <div className="text-lg font-black">{lastAnalyzedResult.failedLEDs}</div>
                     </div>
                   </div>
 
@@ -617,7 +629,7 @@ export const CCTVMonitoring: React.FC = () => {
                     </div>
                   </div>
 
-                  {lastAnalyzedResult.autoTicketId && (
+                  {lastAnalyzedResult.autoTicketId && lastAnalyzedResult.failedLEDs > 0 && (
                     <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs text-emerald-800">
                       <div className="font-bold">
                         Work Order Auto-Generated: #{lastAnalyzedResult.autoTicketId}
