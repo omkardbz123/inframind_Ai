@@ -1,6 +1,8 @@
 import { CCTVAnalysisResult } from '../types/cctv';
-import { DepartmentType, UserRole } from '../types/user';
+import { DepartmentType } from '../types/user';
 import { TicketPriority } from '../types/ticket';
+
+export const GEMINI_DEFAULT_MODEL = (import.meta.env.VITE_GEMINI_MODEL as string) || 'gemini-3.5-flash-lite';
 
 export interface GeminiLEDComparisonOutput {
   status: CCTVAnalysisResult;
@@ -12,6 +14,7 @@ export interface GeminiLEDComparisonOutput {
   electricityStatus: 'on' | 'off';
   recommendation: string;
   rawResponse?: string;
+  modelUsed?: string;
 }
 
 export interface FaultAutoClassifyOutput {
@@ -21,10 +24,11 @@ export interface FaultAutoClassifyOutput {
   urgencyScore: number;
   refinedTitle: string;
   summaryReason: string;
+  modelUsed?: string;
 }
 
 /**
- * Compare reference (lights ON baseline) and current snapshot using Gemini Vision API
+ * Compare reference (lights ON baseline) and current snapshot using Gemini 3.5 Flash Lite Vision API
  */
 export async function compareCCTVImagesWithGemini(
   referenceBase64OrUrl: string,
@@ -33,7 +37,7 @@ export async function compareCCTVImagesWithGemini(
   locationInfo: { building: string; floor: number; wing: string; area: string },
   customApiKey?: string
 ): Promise<GeminiLEDComparisonOutput> {
-  const apiKey = customApiKey || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  const apiKey = (customApiKey || (import.meta.env.VITE_GEMINI_API_KEY as string) || '').trim();
 
   // If power is completely cut off, we treat it as power outage
   if (!electricityIsOn) {
@@ -46,11 +50,12 @@ export async function compareCCTVImagesWithGemini(
       detectedIssues: ['Campus electricity grid for this wing is offline. All illumination disabled.'],
       electricityStatus: 'off',
       recommendation: 'Do not dispatch technician for individual LED repair. Check main substation breaker / generator switch.',
+      modelUsed: GEMINI_DEFAULT_MODEL,
     };
   }
 
-  // If API key is present and images are base64
-  if (apiKey && (referenceBase64OrUrl.startsWith('data:') || currentBase64OrUrl.startsWith('data:'))) {
+  // If API key is present and images are provided
+  if (apiKey) {
     try {
       const cleanRefBase64 = referenceBase64OrUrl.includes('base64,')
         ? referenceBase64OrUrl.split('base64,')[1]
@@ -60,11 +65,11 @@ export async function compareCCTVImagesWithGemini(
         : currentBase64OrUrl;
 
       const promptText = `
-You are an expert automated campus facility inspector analyzing CCTV night footage for Smart India Hackathon.
+You are an expert automated campus facility inspector analyzing CCTV night footage for MAEER's MIT Arts, Commerce & Science College (MIT ACSC), Alandi, Pune.
 Location: ${locationInfo.building}, Floor ${locationInfo.floor}, ${locationInfo.wing} wing, Area: ${locationInfo.area}.
-Context: Campus main power is ON.
+Context: Campus main electrical supply is ACTIVE.
 
-Image 1 is the BASELINE REFERENCE photo when all ceiling LED tube lights were 100% operational.
+Image 1 is the BASELINE REFERENCE photo when all corridor ceiling LED fixtures were 100% operational.
 Image 2 is the CURRENT live photo taken tonight.
 
 TASK:
@@ -84,7 +89,7 @@ TASK:
 `;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_DEFAULT_MODEL}:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -100,7 +105,7 @@ TASK:
             ],
             generationConfig: {
               responseMimeType: 'application/json',
-              temperature: 0.2,
+              temperature: 0.15,
             },
           }),
         }
@@ -114,18 +119,20 @@ TASK:
           return {
             ...parsed,
             rawResponse: textContent,
+            modelUsed: GEMINI_DEFAULT_MODEL,
           };
         }
+      } else {
+        console.warn('Gemini API response error status:', response.status);
       }
     } catch (err) {
       console.warn('Gemini live API call fallback triggered:', err);
     }
   }
 
-  // Built-in intelligent analysis simulation for prototype demo
-  await new Promise((r) => setTimeout(r, 1200));
+  // Built-in fallback analysis simulation
+  await new Promise((r) => setTimeout(r, 600));
 
-  // Determine realistic simulated result based on image difference or state
   const isFailure = currentBase64OrUrl.includes('failure') || Math.random() > 0.4;
 
   if (isFailure) {
@@ -141,6 +148,7 @@ TASK:
       ],
       electricityStatus: 'on',
       recommendation: `High priority replacement needed. Automated work order T-AUTO recommended for Electrical dept.`,
+      modelUsed: `${GEMINI_DEFAULT_MODEL} (Simulation Fallback)`,
     };
   }
 
@@ -153,22 +161,23 @@ TASK:
     detectedIssues: ['All 8 LED lighting fixtures functioning within normal lumen tolerance.'],
     electricityStatus: 'on',
     recommendation: 'No maintenance action required. Corridor illumination is optimal.',
+    modelUsed: `${GEMINI_DEFAULT_MODEL} (Simulation Fallback)`,
   };
 }
 
 /**
- * Intelligent fault classification from voice/text transcript using Gemini
+ * Intelligent fault classification from voice/text transcript using Gemini 3.5 Flash Lite
  */
 export async function classifyFaultWithGemini(
   userInput: string,
   customApiKey?: string
 ): Promise<FaultAutoClassifyOutput> {
-  const apiKey = customApiKey || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  const apiKey = (customApiKey || (import.meta.env.VITE_GEMINI_API_KEY as string) || '').trim();
 
   if (apiKey && userInput.length > 5) {
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_DEFAULT_MODEL}:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -177,7 +186,8 @@ export async function classifyFaultWithGemini(
               {
                 parts: [
                   {
-                    text: `Analyze this campus fault report and classify it into JSON format.
+                    text: `You are an AI maintenance coordinator for MAEER's MIT Arts, Commerce & Science College (MIT ACSC), Alandi, Pune.
+Analyze this campus breakdown report and return STRICT JSON:
 Fault description: "${userInput}"
 
 Valid categories: "electrical", "plumbing", "technical", "janitorial", "furniture", "network".
@@ -208,7 +218,11 @@ Output JSON format:
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
-          return JSON.parse(text);
+          const parsed = JSON.parse(text);
+          return {
+            ...parsed,
+            modelUsed: GEMINI_DEFAULT_MODEL,
+          };
         }
       }
     } catch (e) {
@@ -268,5 +282,6 @@ Output JSON format:
     urgencyScore,
     refinedTitle: userInput.slice(0, 50),
     summaryReason: `Classified as ${category.toUpperCase()} based on campus asset keywords. Urgency score calculated at ${urgencyScore}/100.`,
+    modelUsed: `${GEMINI_DEFAULT_MODEL} (Local Heuristics)`,
   };
 }

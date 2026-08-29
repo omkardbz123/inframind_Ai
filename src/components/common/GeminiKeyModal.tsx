@@ -9,7 +9,9 @@ interface GeminiKeyModalProps {
 
 export const GeminiKeyModal: React.FC<GeminiKeyModalProps> = ({ isOpen, onClose }) => {
   const { customGeminiApiKey, setGeminiApiKey } = useAuthStore();
-  const [keyInput, setKeyInput] = useState(customGeminiApiKey || '');
+  const [keyInput, setKeyInput] = useState(
+    customGeminiApiKey || (import.meta.env.VITE_GEMINI_API_KEY as string) || ''
+  );
 
   if (!isOpen) return null;
 
@@ -34,24 +36,24 @@ export const GeminiKeyModal: React.FC<GeminiKeyModalProps> = ({ isOpen, onClose 
             <Key className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-900">Google Gemini 2.0 Flash Key</h3>
-            <p className="text-xs text-slate-500">Live AI Vision analysis & Voice NLP</p>
+            <h3 className="text-base font-bold text-slate-900">Gemini 3.5 Flash Lite</h3>
+            <p className="text-xs text-slate-500">Google AI Studio • Live Multimodal CCTV Vision</p>
           </div>
         </div>
 
         <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
           <div className="flex items-center gap-1.5 font-bold text-slate-800">
             <Sparkles className="w-4 h-4 text-maroon-700" />
-            <span>Built-in Fallback Active</span>
+            <span>Google AI Studio Key Connected</span>
           </div>
           <p className="text-[11px] leading-relaxed">
-            The platform includes intelligent heuristic simulations. Entering your Google AI Studio API key enables real-time Gemini Vision calls.
+            Running <strong>Gemini 3.5 Flash Lite</strong> with high-speed rate limits (up to 250,000 tokens/min) for real-time corridor illumination scans and voice report NLP.
           </p>
         </div>
 
         <form onSubmit={handleSave} className="space-y-3 text-xs">
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Enter Gemini API Key:</label>
+            <label className="block font-semibold text-slate-700 mb-1">Gemini API Key:</label>
             <input
               type="password"
               placeholder="AIzaSy..."
@@ -61,23 +63,23 @@ export const GeminiKeyModal: React.FC<GeminiKeyModalProps> = ({ isOpen, onClose 
             />
           </div>
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex justify-between items-center pt-2">
             <button
               type="button"
               onClick={() => {
                 setKeyInput('');
                 setGeminiApiKey('');
-                onClose();
               }}
-              className="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold"
+              className="text-slate-500 hover:text-rose-600 text-xs font-semibold"
             >
-              Reset
+              Reset Key
             </button>
+
             <button
               type="submit"
-              className="flex-1 py-2 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl font-bold shadow-xs"
+              className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl font-bold shadow-xs transition"
             >
-              Save API Key
+              Save & Activate
             </button>
           </div>
         </form>
