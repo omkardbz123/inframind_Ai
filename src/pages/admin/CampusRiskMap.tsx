@@ -4,6 +4,11 @@ import {
   Flame,
   Layers,
   ArrowRight,
+  AlertTriangle,
+  Zap,
+  Droplets,
+  Activity,
+  Video,
 } from 'lucide-react';
 import { CAMPUS_BUILDINGS } from '../../lib/constants';
 import { useTicketStore } from '../../store/ticketStore';
@@ -20,9 +25,9 @@ export const CampusRiskMap: React.FC = () => {
   const [selectedWing, setSelectedWing] = useState<'east' | 'west' | 'central' | 'north'>('east');
 
   const selectedBuilding =
-    CAMPUS_BUILDINGS.find((b) => b.id === selectedBuildingId) || CAMPUS_BUILDINGS[0];
+    CAMPUS_BUILDINGS.find((b: any) => b.id === selectedBuildingId) || CAMPUS_BUILDINGS[0];
   const selectedFloor =
-    selectedBuilding.floors.find((f) => f.floorNumber === selectedFloorNum) ||
+    selectedBuilding.floors.find((f: any) => f.floorNumber === selectedFloorNum) ||
     selectedBuilding.floors[0];
 
   const getWingRiskLevel = (buildingName: string, floorNum: number, wingName: string) => {
@@ -44,7 +49,7 @@ export const CampusRiskMap: React.FC = () => {
         a.predictiveScore >= 80
     );
 
-    const hasCameraFailure = cameras.some(
+    const wingCameras = cameras.filter(
       (c) =>
         c.building.includes(buildingName) &&
         c.floor === floorNum &&
@@ -52,52 +57,23 @@ export const CampusRiskMap: React.FC = () => {
         c.lastAnalysisResult === 'failure_detected'
     );
 
-    if (hasCritical || hasCameraFailure || wingAssets.length >= 2 || wingTickets.length >= 3) {
-      return {
-        level: 'critical',
-        badge: 'CRITICAL HOTSPOT',
-        color: 'border-rose-300 bg-rose-50/70 text-rose-900',
-        dot: 'bg-rose-600 animate-ping',
-        count: wingTickets.length,
-        assetCount: wingAssets.length,
-      };
-    }
-
-    if (hasHigh || wingTickets.length > 0 || wingAssets.length > 0) {
-      return {
-        level: 'moderate',
-        badge: 'MODERATE RISK',
-        color: 'border-amber-300 bg-amber-50/70 text-amber-900',
-        dot: 'bg-amber-500',
-        count: wingTickets.length,
-        assetCount: wingAssets.length,
-      };
-    }
+    let score = 20;
+    if (hasCritical) score += 40;
+    if (hasHigh) score += 20;
+    score += wingAssets.length * 15;
+    score += wingCameras.length * 20;
+    score = Math.min(100, score);
 
     return {
-      level: 'low',
-      badge: 'OPTIMAL',
-      color: 'border-slate-200 bg-white text-slate-700',
-      dot: 'bg-emerald-500',
-      count: 0,
-      assetCount: 0,
+      score,
+      tickets: wingTickets,
+      assets: wingAssets,
+      cameras: wingCameras,
+      level: score >= 75 ? 'critical' : score >= 50 ? 'high' : score >= 30 ? 'moderate' : 'low',
     };
   };
 
-  const activeZoneTickets = tickets.filter(
-    (t) =>
-      t.building.includes(selectedBuilding.name) &&
-      t.floor === selectedFloorNum &&
-      t.wing === selectedWing &&
-      t.status !== 'resolved'
-  );
-
-  const activeZoneAssets = assets.filter(
-    (a) =>
-      a.building.includes(selectedBuilding.name) &&
-      a.floor === selectedFloorNum &&
-      a.wing === selectedWing
-  );
+  const currentWingRisk = getWingRiskLevel(selectedBuilding.name, selectedFloorNum, selectedWing);
 
   return (
     <div className="space-y-6">
@@ -107,63 +83,26 @@ export const CampusRiskMap: React.FC = () => {
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             Campus Infrastructure Risk Heat Map
             <span className="px-2.5 py-0.5 bg-maroon-50 text-maroon-800 text-xs font-mono font-bold rounded-md border border-maroon-200">
-              Hotspot Radar
+              Live Radar
             </span>
           </h2>
           <p className="text-xs text-slate-500">
-            Real-time geospatial breakdown density across academic wings, floors, and classroom clusters
+            Geospatial hazard breakdown, CCTV night vision defects, and predictive equipment hotspots across MIT ACSC
           </p>
         </div>
       </div>
 
-      {/* Top Urgent Alert Banner */}
-      <div className="p-5 bg-rose-50 border-2 border-rose-200 rounded-3xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-rose-100 text-rose-700 rounded-2xl border border-rose-200 shrink-0">
-            <Flame className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-rose-700 uppercase tracking-widest">
-                Highest Priority Risk Zone Detected
-              </span>
-              <span className="px-2 py-0.5 bg-rose-600 text-white font-mono text-[9px] font-bold rounded-full">
-                LVL 1 URGENT
-              </span>
-            </div>
-            <h3 className="text-base font-bold text-slate-900 mt-0.5">
-              MIT ACSC Main Building — 2nd Floor East Corridor
-            </h3>
-            <p className="text-xs text-slate-600 mt-0.5">
-              CCTV AI detected 2 failed LED tube lights + 1 sparking fan fixture in Class 202 + High RO purifier saturation.
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={() => {
-            setSelectedBuildingId('bldg-mit-main');
-            setSelectedFloorNum(2);
-            setSelectedWing('east');
-          }}
-          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shrink-0 shadow-sm flex items-center gap-1.5 transition"
-        >
-          <span>Drill Down Hotspot</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
-
       {/* Building & Floor Selector */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-xs">
-          {CAMPUS_BUILDINGS.map((b) => (
+        <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-xs overflow-x-auto max-w-full">
+          {CAMPUS_BUILDINGS.map((b: any) => (
             <button
               key={b.id}
               onClick={() => {
                 setSelectedBuildingId(b.id);
                 setSelectedFloorNum(b.floors[0].floorNumber);
               }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
                 selectedBuildingId === b.id
                   ? 'bg-maroon-800 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -174,12 +113,12 @@ export const CampusRiskMap: React.FC = () => {
           ))}
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-xs">
-          {selectedBuilding.floors.map((f) => (
+        <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-xs overflow-x-auto max-w-full">
+          {selectedBuilding.floors.map((f: any) => (
             <button
               key={f.floorNumber}
               onClick={() => setSelectedFloorNum(f.floorNumber)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
                 selectedFloorNum === f.floorNumber
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -208,7 +147,7 @@ export const CampusRiskMap: React.FC = () => {
 
             {/* Wing Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {selectedFloor?.wings.map((w) => {
+              {selectedFloor?.wings.map((w: any) => {
                 const risk = getWingRiskLevel(selectedBuilding.name, selectedFloorNum, w.wing);
                 const isSelected = selectedWing === w.wing;
 
@@ -219,27 +158,33 @@ export const CampusRiskMap: React.FC = () => {
                     onClick={() => setSelectedWing(w.wing as any)}
                     className={`p-4 rounded-2xl border text-left transition-all ${
                       isSelected
-                        ? 'ring-2 ring-maroon-800 scale-[1.01] shadow-md'
-                        : 'hover:border-slate-300'
-                    } ${risk.color}`}
+                        ? 'border-maroon-800 bg-maroon-50/70 ring-2 ring-maroon-800/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${risk.dot}`} />
-                        <span className="font-bold text-xs capitalize text-slate-900">
-                          {w.wing} Wing Area
-                        </span>
-                      </div>
-                      <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded border border-current">
-                        {risk.badge}
+                      <span className="font-bold text-xs uppercase tracking-wider text-slate-800">
+                        {w.wing} Wing
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                          risk.level === 'critical'
+                            ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                            : risk.level === 'high'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        }`}
+                      >
+                        Risk: {risk.score}/100
                       </span>
                     </div>
 
-                    <div className="text-xs text-slate-600 line-clamp-2">{w.label}</div>
+                    <p className="text-xs text-slate-500 line-clamp-1">{w.label}</p>
 
-                    <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-mono">
-                      <span>{risk.count} Active Faults</span>
-                      <span>{risk.assetCount} High-Risk Assets</span>
+                    <div className="mt-3 flex items-center gap-3 text-[11px] text-slate-600 font-mono">
+                      <span>{risk.tickets.length} Active Tickets</span>
+                      <span>•</span>
+                      <span>{w.rooms.length} Rooms</span>
                     </div>
                   </button>
                 );
@@ -248,80 +193,61 @@ export const CampusRiskMap: React.FC = () => {
           </div>
         </div>
 
-        {/* Right 5 Cols: Detail Breakdown of Selected Zone */}
+        {/* Right 5 Cols: Wing Drilldown Details */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="white-card p-5 rounded-3xl space-y-4">
+          <div className="white-card p-5 rounded-3xl space-y-4 border-l-4 border-l-maroon-800">
             <div>
-              <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-maroon-800">
-                Selected Zone Diagnostics
+              <div className="text-[10px] uppercase font-bold text-maroon-800 tracking-wider">
+                Zone Inspection Details
               </div>
-              <h3 className="text-base font-bold text-slate-900 mt-0.5 capitalize">
-                {selectedFloor?.floorName} — {selectedWing} Wing
+              <h3 className="text-base font-bold text-slate-900 capitalize">
+                {selectedWing} Wing — Floor {selectedFloorNum} ({selectedBuilding.name})
               </h3>
-              <p className="text-xs text-slate-500">Active breakdowns and critical telemetry in this sector</p>
             </div>
 
-            {/* Active Tickets in this wing */}
-            <div>
-              <div className="text-xs font-semibold text-slate-700 mb-2">
-                Open Fault Tickets ({activeZoneTickets.length}):
+            {/* Risk Indicators */}
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-600">Calculated Zone Risk Index:</span>
+                <span className="font-mono font-bold text-maroon-800 text-sm">
+                  {currentWingRisk.score}/100
+                </span>
               </div>
-              {activeZoneTickets.length === 0 ? (
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
-                  No active reported breakdowns in this wing.
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${
+                    currentWingRisk.score >= 75
+                      ? 'bg-rose-600'
+                      : currentWingRisk.score >= 50
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${currentWingRisk.score}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Active Tickets in this Wing */}
+            <div className="space-y-2">
+              <div className="text-xs font-bold text-slate-700">Open Tickets in this Zone:</div>
+              {currentWingRisk.tickets.length === 0 ? (
+                <div className="p-3 text-center text-xs text-slate-500 bg-slate-50 rounded-xl">
+                  No open breakdown tickets reported in this wing.
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {activeZoneTickets.map((t) => (
-                    <div
-                      key={t.id}
-                      className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-maroon-800">#{t.id}</span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 bg-rose-100 text-rose-800 rounded font-bold">
-                          {t.priority.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="font-semibold text-slate-900">{t.title}</div>
-                      <div className="text-[11px] text-slate-500">
-                        Room: {t.roomNumber || 'Corridor'} • {t.assignedToName || 'Unassigned'}
-                      </div>
+                currentWingRisk.tickets.map((t) => (
+                  <div key={t.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono font-bold text-maroon-800">#{t.id}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white border border-slate-200">
+                        {t.priority.toUpperCase()}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Aging equipment in this wing */}
-            <div className="pt-2 border-t border-slate-100">
-              <div className="text-xs font-semibold text-slate-700 mb-2">
-                Monitored Equipment ({activeZoneAssets.length}):
-              </div>
-              <div className="space-y-1.5">
-                {activeZoneAssets.map((a) => (
-                  <div
-                    key={a.id}
-                    className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-900">{a.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">Tag: {a.assetTag}</div>
-                    </div>
-                    <span
-                      className={`font-mono text-xs font-bold ${
-                        a.predictiveScore >= 80
-                          ? 'text-rose-600'
-                          : a.predictiveScore >= 60
-                          ? 'text-amber-700'
-                          : 'text-emerald-700'
-                      }`}
-                    >
-                      {a.predictiveScore}/100
-                    </span>
+                    <div className="font-bold text-slate-900">{t.title}</div>
+                    <div className="text-[11px] text-slate-500">Room {t.roomNumber || 'General'}</div>
                   </div>
-                ))}
-              </div>
+                ))
+              )}
             </div>
           </div>
         </div>

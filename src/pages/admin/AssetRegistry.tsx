@@ -311,7 +311,7 @@ export const AssetRegistry: React.FC = () => {
                     onChange={(e) => setBuilding(e.target.value)}
                     className="w-full px-2 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 text-[11px]"
                   >
-                    {CAMPUS_BUILDINGS.map((b) => (
+                    {CAMPUS_BUILDINGS.map((b: any) => (
                       <option key={b.id} value={b.name}>
                         {b.code}
                       </option>
