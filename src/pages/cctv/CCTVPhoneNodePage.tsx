@@ -17,14 +17,21 @@ import {
   ExternalLink,
   Wifi,
   Activity,
+  Radio,
 } from 'lucide-react';
 import { CAMPUS_BUILDINGS } from '../../lib/constants';
 import { useCCTVStore } from '../../store/cctvStore';
 import { WingType } from '../../types/location';
-import { cctvStreamService } from '../../lib/cctvStreamService';
+import { cctvStreamService, DEFAULT_HUB_ID } from '../../lib/cctvStreamService';
 
 export const CCTVPhoneNodePage: React.FC = () => {
   const { registerPhoneNode, updatePhoneHeartbeat } = useCCTVStore();
+
+  // Read Hub ID from URL or default
+  const [hubId, setHubId] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('hub') || DEFAULT_HUB_ID;
+  });
 
   // Installation state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -50,6 +57,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
   const [lastFrameTime, setLastFrameTime] = useState<string>('');
   const [cameraError, setCameraError] = useState<string>('');
   const [frameCount, setFrameCount] = useState<number>(0);
+  const [isWebRtcConnected, setIsWebRtcConnected] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,7 +113,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
     }
   };
 
-  // Start Smartphone Camera
+  // Start Smartphone Camera & Connect WebRTC
   const startCamera = async () => {
     setCameraError('');
     try {
@@ -132,6 +140,16 @@ export const CCTVPhoneNodePage: React.FC = () => {
 
       setCameraActive(true);
 
+      // Connect via Universal WebRTC PeerJS to Central PC Hub
+      cctvStreamService
+        .initPhoneNode(nodeId, stream, hubId)
+        .then(() => {
+          setIsWebRtcConnected(true);
+        })
+        .catch((e) => {
+          console.warn('WebRTC peer init notice:', e);
+        });
+
       // Check for torch/flashlight capability
       const videoTrack = stream.getVideoTracks()[0];
       const capabilities: any = videoTrack?.getCapabilities?.() || {};
@@ -141,7 +159,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
     } catch (err: any) {
       console.error('Camera access error:', err);
       setCameraError(
-        `Unable to access camera: ${err.message || 'Permission denied'}. Please allow camera permissions.`
+        `Unable to access camera: ${err.message || 'Permission denied'}. Please ensure HTTPS and allow camera permissions in browser.`
       );
       setCameraActive(false);
     }
@@ -156,7 +174,9 @@ export const CCTVPhoneNodePage: React.FC = () => {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    cctvStreamService.cleanup();
     setCameraActive(false);
+    setIsWebRtcConnected(false);
   };
 
   const toggleTorch = async () => {
@@ -212,7 +232,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
             const frameDataUrl = canvas.toDataURL('image/jpeg', 0.65);
             seqRef.current += 1;
 
-            // 1. Broadcast ultra-fast 24+ FPS frame to main portal
+            // Broadcast real-time 28+ FPS frame across WebRTC DataChannel & local channel
             cctvStreamService.broadcastFrame({
               cameraId: nodeId,
               frameDataUrl,
@@ -224,7 +244,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
               torch: torchOn,
             });
 
-            // 2. Calculate real FPS on phone HUD
+            // Calculate real FPS on phone HUD
             frameTimes.push(now);
             if (frameTimes.length > 20) {
               frameTimes.shift();
@@ -238,8 +258,8 @@ export const CCTVPhoneNodePage: React.FC = () => {
             setFrameCount((prev) => prev + 1);
             setLastFrameTime(new Date().toLocaleTimeString());
 
-            // 3. Throttle store persist to every 2 seconds to avoid disk wear
-            if (seqRef.current % 50 === 0) {
+            // Throttle store persist to avoid disk wear
+            if (seqRef.current % 40 === 0) {
               updatePhoneHeartbeat(nodeId, frameDataUrl, batteryLevel, torchOn);
             }
           }
@@ -319,8 +339,9 @@ export const CCTVPhoneNodePage: React.FC = () => {
           <div>
             <div className="font-extrabold text-xs text-white tracking-tight flex items-center gap-1.5">
               <span>MIT ACSC CCTV Node</span>
-              <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-mono font-bold">
-                28 FPS High-Speed Stream
+              <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-mono font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                WebRTC Live
               </span>
             </div>
             <div className="text-[10px] text-slate-400">Alandi Campus Light & Hazard Sensor</div>
@@ -355,7 +376,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
               </div>
               <h2 className="text-xl font-black text-white">Register Phone as 24+ FPS CCTV Camera</h2>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Streams high-fps live motion video to the main portal with low latency for Gemini 3.5 Flash Lite inspection.
+                Streams high-fps live motion video to the PC main portal over WebRTC for Gemini 3.5 Flash Lite inspection.
               </p>
             </div>
 
@@ -449,7 +470,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
                 className="w-full py-3.5 bg-maroon-800 hover:bg-maroon-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-maroon-900/30 transition text-sm active:scale-98"
               >
                 <Video className="w-5 h-5" />
-                <span>Start Camera & Broadcast 28 FPS Live Feed</span>
+                <span>Start Camera & Stream Live to PC Portal</span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </button>
             </form>
@@ -478,7 +499,9 @@ export const CCTVPhoneNodePage: React.FC = () => {
                       LIVE • {fps} FPS
                     </span>
                     <span className="text-white/40 font-mono">|</span>
-                    <span className="text-[10px] font-mono text-emerald-400">Frame #{frameCount}</span>
+                    <span className="text-[10px] font-mono text-emerald-400">
+                      {isWebRtcConnected ? '● WEBRTC CONNECTED' : 'STREAMING'}
+                    </span>
                   </div>
 
                   <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-mono text-white">
@@ -577,10 +600,10 @@ export const CCTVPhoneNodePage: React.FC = () => {
             <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl text-xs space-y-2">
               <div className="flex items-center gap-2 font-bold text-white">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Streaming at 28 FPS Live Motion to Main Portal!</span>
+                <span>Streaming Live Motion to PC Main Portal!</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Your video frames are streaming with ultra-low latency. Open <strong>CCTV LED Vision AI</strong> on your laptop to watch the live motion feed and run Gemini AI scans.
+                Your video frames are streaming across the network to the central CCTV control room. Open <strong>CCTV LED Vision AI</strong> on your PC to watch the live motion feed and run Gemini AI scans.
               </p>
             </div>
           </div>

@@ -1,158 +1,155 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
 import {
-  Sparkles,
-  Shield,
   GraduationCap,
-  Briefcase,
-  Wrench,
   UserCheck,
-  Lock,
-  AlertTriangle,
-  CheckCircle2,
-  Building2,
+  Shield,
+  Wrench,
+  Sparkles,
   ArrowRight,
+  Lock,
+  Mail,
+  AlertCircle,
+  Building,
+  Smartphone,
+  Video,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { COLLEGE_CONFIG } from '../../lib/constants';
 import { UserRole } from '../../types/user';
-
-interface GoogleJwtPayload {
-  email: string;
-  name: string;
-  picture?: string;
-  sub: string;
-  hd?: string;
-}
+import { COLLEGE_CONFIG } from '../../lib/constants';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithGoogle, switchUserRole } = useAuthStore();
+  const { loginWithGoogle, authError, clearAuthError } = useAuthStore();
 
-  // Active Login Portal Tab: 'student' or 'teacher'
   const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
   const [inputEmail, setInputEmail] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-
-  // Handle Real Google OAuth Login
-  const handleGoogleSuccess = async (credentialResponse: any) => {
-    setErrorMsg('');
-    setSuccessMsg('');
-    try {
-      if (!credentialResponse.credential) {
-        throw new Error('Google credential token not received.');
-      }
-
-      const decoded: GoogleJwtPayload = jwtDecode(credentialResponse.credential);
-      const email = decoded.email?.toLowerCase();
-      const name = decoded.name;
-      const hostedDomain = decoded.hd;
-
-      // Verify domain strictly matches @mitacsc.edu.in or @mitacsc.ac.in
-      const isAllowed =
-        (hostedDomain && COLLEGE_CONFIG.allowedDomains.includes(hostedDomain)) ||
-        COLLEGE_CONFIG.allowedDomains.some((d) => email.endsWith(`@${d}`));
-
-      if (!isAllowed) {
-        setErrorMsg(
-          `Access Denied: Account "${email}" does not belong to @${COLLEGE_CONFIG.domain}. Only students & teachers of MIT ACSC with @mitacsc.edu.in are authorized.`
-        );
-        return;
-      }
-
-      setSuccessMsg(`Welcome, ${name}! Redirecting to ${activeTab === 'student' ? 'Student' : 'Faculty'} Portal...`);
-      const res = await loginWithGoogle(email, name, activeTab);
-      if (res.success) {
-        setTimeout(() => navigate('/'), 600);
-      } else {
-        setErrorMsg(res.error || 'Authentication error');
-      }
-    } catch (err: any) {
-      setErrorMsg(`Google Authentication Error: ${err.message || 'Login failed'}`);
-    }
-  };
+  const [localError, setLocalError] = useState('');
 
   const handleDomainLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
+    setLocalError('');
+    clearAuthError();
 
-    const email = inputEmail.trim().toLowerCase();
-
-    // Check if email ends with @mitacsc.edu.in or @mitacsc.ac.in
-    const isValidCollegeEmail = COLLEGE_CONFIG.allowedDomains.some(
-      (domain) => email.endsWith(`@${domain}`)
+    const trimmed = inputEmail.trim().toLowerCase();
+    const emailDomain = trimmed.split('@')[1]?.toLowerCase();
+    const isAllowedDomain = COLLEGE_CONFIG.allowedDomains.some(
+      (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
     );
 
-    if (!isValidCollegeEmail) {
-      setErrorMsg(
-        `Invalid Domain: Only official email addresses ending with @mitacsc.edu.in (e.g. 5454317@mitacsc.edu.in) are permitted to log in.`
+    if (!isAllowedDomain) {
+      setLocalError(
+        'Access Restricted: Only official college email addresses ending with @mitacsc.edu.in or @mitacsc.ac.in are permitted.'
       );
       return;
     }
 
-    const res = await loginWithGoogle(email, undefined, activeTab);
+    const userName =
+      activeTab === 'student'
+        ? trimmed.split('@')[0].toUpperCase()
+        : `Prof. ${trimmed.split('@')[0]}`;
+
+    const res = await loginWithGoogle(trimmed, userName, activeTab);
     if (res.success) {
-      setSuccessMsg(`Login verified for ${email}! Redirecting...`);
-      setTimeout(() => navigate('/'), 500);
-    } else {
-      setErrorMsg(res.error || 'Access Denied');
+      navigate('/');
     }
   };
 
-  const handleQuickFill = (email: string) => {
-    setInputEmail(email);
-    setErrorMsg('');
-  };
+  const handleQuickDemoLogin = async (role: UserRole) => {
+    const demoAccounts: Record<
+      UserRole,
+      { email: string; name: string }
+    > = {
+      student: {
+        email: '5454317@mitacsc.edu.in',
+        name: 'Omkar (TY B.Sc CS)',
+      },
+      teacher: {
+        email: 'dr.deshpande@mitacsc.edu.in',
+        name: 'Dr. Deshpande (HOD Comp Sci)',
+      },
+      employee: {
+        email: 'rajesh.kamble@mitacsc.edu.in',
+        name: 'Rajesh Kamble (Senior Electrician)',
+      },
+      manager: {
+        email: 'estate.manager@mitacsc.edu.in',
+        name: 'Suresh Patil (Campus Estate Head)',
+      },
+      admin: {
+        email: 'principal@mitacsc.edu.in',
+        name: 'Dr. B. B. Waphare (Principal)',
+      },
+    };
 
-  const handleQuickDemoLogin = (role: UserRole) => {
-    switchUserRole(role);
-    navigate('/');
+    const target = demoAccounts[role];
+    const res = await loginWithGoogle(target.email, target.name, role);
+    if (res.success) {
+      navigate('/');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-lg space-y-6">
-        {/* College Header */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-maroon-950 to-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
+      <div className="w-full max-w-md space-y-6">
+        {/* College Header Crest */}
         <div className="text-center space-y-2">
-          {/* Logo Badge */}
-          <div className="w-16 h-16 rounded-3xl bg-maroon-800 flex items-center justify-center text-white mx-auto shadow-lg shadow-maroon-900/20 ring-4 ring-maroon-100">
-            <span className="font-serif font-black text-2xl tracking-tighter">MIT</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-xl p-1.5 ring-4 ring-maroon-800/30">
+            <div className="w-full h-full rounded-xl bg-maroon-800 flex flex-col items-center justify-center text-white font-serif font-black tracking-wider">
+              <span className="text-xs">MAEER</span>
+              <span className="text-[10px] tracking-tight">MIT ACSC</span>
+            </div>
           </div>
 
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            MIT ACSC <span className="text-maroon-800">CampusCare</span>
-          </h1>
-          <p className="text-xs font-medium text-slate-600 max-w-sm mx-auto">
-            {COLLEGE_CONFIG.name}
-          </p>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-maroon-50 text-maroon-900 border border-maroon-200">
-            <Sparkles className="w-3.5 h-3.5 text-maroon-700" />
-            <span>Official Student & Teacher Maintenance Portal</span>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              MIT ACSC CampusCare
+            </h1>
+            <p className="text-xs text-maroon-200 font-medium">
+              MAEER's MIT Arts, Commerce & Science College, Alandi (D.), Pune
+            </p>
           </div>
         </div>
 
+        {/* Turn Phone into CCTV Banner */}
+        <a
+          href="/cctv-node"
+          className="p-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-2xl font-bold flex items-center justify-between shadow-lg shadow-amber-900/30 transition transform hover:-translate-y-0.5 active:scale-98"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center shrink-0">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-black uppercase tracking-tight">
+                Turn this Phone into a CCTV Node
+              </div>
+              <div className="text-[10px] text-slate-900/80 font-medium">
+                Stream live camera to PC CCTV Control Room (No Login Needed)
+              </div>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 shrink-0" />
+        </a>
+
         {/* Main Login Card */}
-        <div className="white-card p-6 sm:p-8 rounded-3xl space-y-6 shadow-md border border-slate-200">
-          {/* Portal Switcher Tabs */}
-          <div className="grid grid-cols-2 p-1.5 bg-slate-100 rounded-2xl gap-1">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-7 shadow-2xl border border-white/20 space-y-5">
+          {/* Segmented Tab Switcher */}
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl">
             <button
               type="button"
               onClick={() => {
                 setActiveTab('student');
-                setErrorMsg('');
-                setInputEmail('5454317@mitacsc.edu.in');
+                setLocalError('');
+                clearAuthError();
               }}
-              className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
                 activeTab === 'student'
-                  ? 'bg-white text-maroon-900 shadow-sm border border-slate-200/80 font-black'
+                  ? 'bg-maroon-800 text-white shadow-md'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <GraduationCap className={`w-4 h-4 ${activeTab === 'student' ? 'text-maroon-800' : 'text-slate-400'}`} />
+              <GraduationCap className="w-4 h-4" />
               <span>Student Login</span>
             </button>
 
@@ -160,91 +157,48 @@ export const LoginPage: React.FC = () => {
               type="button"
               onClick={() => {
                 setActiveTab('teacher');
-                setErrorMsg('');
-                setInputEmail('dr.deshpande@mitacsc.edu.in');
+                setLocalError('');
+                clearAuthError();
               }}
-              className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
                 activeTab === 'teacher'
-                  ? 'bg-white text-maroon-900 shadow-sm border border-slate-200/80 font-black'
+                  ? 'bg-maroon-800 text-white shadow-md'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <UserCheck className={`w-4 h-4 ${activeTab === 'teacher' ? 'text-maroon-800' : 'text-slate-400'}`} />
-              <span>Teacher / Faculty Login</span>
+              <UserCheck className="w-4 h-4" />
+              <span>Teacher / Faculty</span>
             </button>
           </div>
 
-          {/* Portal Subtitle */}
-          <div className="p-3 bg-maroon-50/70 border border-maroon-100 rounded-2xl flex items-center justify-between text-xs">
-            <div>
-              <div className="font-bold text-maroon-950">
-                {activeTab === 'student' ? '🎓 MIT ACSC Student Portal' : '👨‍🏫 MIT ACSC Faculty Portal'}
-              </div>
-              <div className="text-[11px] text-maroon-800">
-                {activeTab === 'student'
-                  ? 'Report classroom breakdowns, track repairs & rate services'
-                  : 'Report lecture hall & lab issues with priority dispatch'}
-              </div>
+          {/* Domain Notice Banner */}
+          <div className="p-3 bg-maroon-50 rounded-xl border border-maroon-100 text-xs text-maroon-900 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-maroon-800 shrink-0" />
+            <div className="text-[11px] leading-tight">
+              <strong>Institutional Single Sign-On:</strong> Requires valid college email ID (e.g. <code>@mitacsc.edu.in</code>).
             </div>
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-maroon-800 text-white shrink-0">
-              @mitacsc.edu.in
-            </span>
           </div>
 
           {/* Error Message */}
-          {errorMsg && (
-            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 font-medium flex items-start gap-2 animate-in fade-in duration-150">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
+          {(localError || authError) && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2 animate-in fade-in duration-150">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{localError || authError}</span>
             </div>
           )}
 
-          {/* Success Message */}
-          {successMsg && (
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium flex items-center gap-2 animate-in fade-in duration-150">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{successMsg}</span>
-            </div>
-          )}
-
-          {/* 1. Official Google OAuth Button */}
-          <div className="space-y-2">
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">
-              Quick Google Single Sign-On
-            </label>
-            <div className="flex justify-center w-full">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setErrorMsg('Google Sign-In popup closed or failed.')}
-                theme="outline"
-                size="large"
-                shape="pill"
-                text="signin_with"
-                logo_alignment="center"
-                width="380"
-              />
-            </div>
-          </div>
-
-          <div className="relative flex items-center justify-center my-1">
-            <div className="border-t border-slate-200 w-full" />
-            <span className="bg-white px-3 text-[10px] uppercase font-bold text-slate-400">
-              Or Sign In with College Email
-            </span>
-            <div className="border-t border-slate-200 w-full" />
-          </div>
-
-          {/* 2. Direct College Email Form */}
-          <form onSubmit={handleDomainLogin} className="space-y-3.5 text-xs">
+          {/* Email Input Form */}
+          <form onSubmit={handleDomainLogin} className="space-y-4">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-700">
-                  {activeTab === 'student' ? 'Student College Email:' : 'Faculty College Email:'}
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-slate-500" />
+                  <span>College Email ID:</span>
                 </label>
                 <button
                   type="button"
                   onClick={() =>
-                    handleQuickFill(
+                    setInputEmail(
                       activeTab === 'student' ? '5454317@mitacsc.edu.in' : 'dr.deshpande@mitacsc.edu.in'
                     )
                   }

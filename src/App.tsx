@@ -17,15 +17,33 @@ import { UserDirectory } from './pages/admin/UserDirectory';
 import { CCTVPhoneNodePage } from './pages/cctv/CCTVPhoneNodePage';
 
 export function App() {
+  // If the browser URL directly targets CCTV Node mode via path or query
+  const isDirectCctvNode =
+    typeof window !== 'undefined' &&
+    (window.location.pathname.includes('cctv-node') ||
+      window.location.pathname.includes('cctv-cam') ||
+      window.location.pathname.includes('node') ||
+      window.location.search.includes('hub=') ||
+      window.location.hash.includes('cctv-node'));
+
+  if (isDirectCctvNode) {
+    return <CCTVPhoneNodePage />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>
         {/* Public Auth Route */}
         <Route path="/login" element={<LoginPage />} />
 
-        {/* Dedicated Smartphone CCTV Node (Standalone PWA Webpage) */}
+        {/* Dedicated Smartphone CCTV Node Standalone Public Routes */}
         <Route path="/cctv-node" element={<CCTVPhoneNodePage />} />
+        <Route path="/cctv-node/*" element={<CCTVPhoneNodePage />} />
         <Route path="/cctv-cam" element={<CCTVPhoneNodePage />} />
+        <Route path="/cctv-cam/*" element={<CCTVPhoneNodePage />} />
+        <Route path="/cctv" element={<CCTVPhoneNodePage />} />
+        <Route path="/node" element={<CCTVPhoneNodePage />} />
+        <Route path="/phone" element={<CCTVPhoneNodePage />} />
 
         {/* Protected App Shell */}
         <Route element={<ProtectedRoute />}>

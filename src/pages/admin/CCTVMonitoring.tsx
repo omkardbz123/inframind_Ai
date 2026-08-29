@@ -20,12 +20,13 @@ import {
   Play,
   Activity,
   HelpCircle,
+  Wifi,
 } from 'lucide-react';
 import { useCCTVStore } from '../../store/cctvStore';
 import { useAuthStore } from '../../store/authStore';
 import { CCTVCamera } from '../../types/cctv';
 import { QRCodeSVG } from 'qrcode.react';
-import { cctvStreamService, LiveFramePayload } from '../../lib/cctvStreamService';
+import { cctvStreamService, LiveFramePayload, DEFAULT_HUB_ID } from '../../lib/cctvStreamService';
 
 export const CCTVMonitoring: React.FC = () => {
   const {
@@ -37,6 +38,7 @@ export const CCTVMonitoring: React.FC = () => {
     runCameraAnalysis,
     setPresetScenario,
     updateCameraImages,
+    registerPhoneNode,
     isAnalyzing,
   } = useCCTVStore();
 
@@ -49,22 +51,60 @@ export const CCTVMonitoring: React.FC = () => {
   const [liveTimestamp, setLiveTimestamp] = useState<string>('');
   const [liveFps, setLiveFps] = useState<number>(28);
   const [liveLatencyMs, setLiveLatencyMs] = useState<number>(24);
+  const [hubId, setHubId] = useState<string>(DEFAULT_HUB_ID);
+  const [hasRemoteWebRtcStream, setHasRemoteWebRtcStream] = useState<boolean>(false);
 
   const liveCanvasRef = useRef<HTMLCanvasElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const latestFrameDataRef = useRef<string>('');
 
   const selectedCam: CCTVCamera =
     cameras.find((c) => c.id === selectedCameraId) || cameras[0];
+
+  // Initialize WebRTC Hub & Listen for Phone Cameras across network
+  useEffect(() => {
+    cctvStreamService
+      .initHub(DEFAULT_HUB_ID, (remoteStream, fromPeerId) => {
+        console.log('🎥 Attached WebRTC Stream from Phone Camera:', fromPeerId);
+        setHasRemoteWebRtcStream(true);
+
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStream;
+          remoteVideoRef.current.play().catch((e) => console.warn('Play video error:', e));
+        }
+
+        // Auto register phone node in list if not already present
+        const phoneCamId = fromPeerId.startsWith('CAM-') ? fromPeerId : `CAM-PHONE-${fromPeerId.slice(-4)}`;
+        registerPhoneNode({
+          id: phoneCamId,
+          name: `📱 Phone CCTV (${fromPeerId.slice(-4)})`,
+          building: 'Main Academic Building (MAB)',
+          floor: 1,
+          wing: 'east',
+          areaDescription: 'Live Smartphone Stream (Cross-Device WebRTC)',
+          isPhoneNode: true,
+          isLiveStreaming: true,
+          deviceBattery: 90,
+        });
+
+        selectCamera(phoneCamId);
+      })
+      .then((id) => setHubId(id));
+
+    return () => {
+      // Keep hub alive across renders
+    };
+  }, [registerPhoneNode, selectCamera]);
 
   // Subscribe to High-Speed 24-30 FPS Real-Time Frames
   useEffect(() => {
     let frameTimes: number[] = [];
     latestFrameDataRef.current = selectedCam.currentSnapshotURL;
 
-    // First draw initial snapshot to canvas
+    // Draw initial snapshot to canvas if available
     const initImg = new Image();
     initImg.onload = () => {
-      if (liveCanvasRef.current) {
+      if (liveCanvasRef.current && !hasRemoteWebRtcStream) {
         const canvas = liveCanvasRef.current;
         const ctx = canvas.getContext('2d');
         if (ctx) {
@@ -82,7 +122,7 @@ export const CCTVMonitoring: React.FC = () => {
         latestFrameDataRef.current = payload.frameDataUrl;
 
         // Render immediately onto hardware-accelerated canvas
-        if (liveCanvasRef.current) {
+        if (liveCanvasRef.current && !hasRemoteWebRtcStream) {
           const img = new Image();
           img.onload = () => {
             if (liveCanvasRef.current) {
@@ -120,7 +160,7 @@ export const CCTVMonitoring: React.FC = () => {
     return () => {
       unsubscribe();
     };
-  }, [selectedCam.id]);
+  }, [selectedCam.id, hasRemoteWebRtcStream]);
 
   // Live timer tick for on-screen CCTV clock
   useEffect(() => {
@@ -132,8 +172,19 @@ export const CCTVMonitoring: React.FC = () => {
 
   const handleRunAnalysis = async () => {
     try {
-      // If we have a fresh live frame from the 28 FPS stream, update the snapshot for Gemini
-      if (latestFrameDataRef.current && latestFrameDataRef.current.startsWith('data:')) {
+      // Grab fresh frame from video element or canvas
+      if (hasRemoteWebRtcStream && remoteVideoRef.current && remoteVideoRef.current.readyState >= 2) {
+        const snapCanvas = document.createElement('canvas');
+        snapCanvas.width = 640;
+        snapCanvas.height = 360;
+        const ctx = snapCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(remoteVideoRef.current, 0, 0, 640, 360);
+          const freshDataUrl = snapCanvas.toDataURL('image/jpeg', 0.85);
+          latestFrameDataRef.current = freshDataUrl;
+          updateCameraImages(selectedCam.id, undefined, freshDataUrl);
+        }
+      } else if (latestFrameDataRef.current && latestFrameDataRef.current.startsWith('data:')) {
         updateCameraImages(selectedCam.id, undefined, latestFrameDataRef.current);
       }
 
@@ -144,7 +195,7 @@ export const CCTVMonitoring: React.FC = () => {
     }
   };
 
-  const phoneNodeUrl = `${window.location.origin}/cctv-node`;
+  const phoneNodeUrl = `${window.location.origin}/cctv-node?hub=${hubId}`;
 
   return (
     <div className="space-y-6">
@@ -158,7 +209,7 @@ export const CCTVMonitoring: React.FC = () => {
             </span>
           </h2>
           <p className="text-xs text-slate-500">
-            Real-time 28 FPS live video streaming and intelligent LED defect diagnosis across campus corridors & classrooms
+            Cross-device WebRTC live video streaming and intelligent LED defect diagnosis across campus corridors & classrooms
           </p>
         </div>
 
@@ -326,7 +377,7 @@ export const CCTVMonitoring: React.FC = () => {
                       {cam.isPhoneNode ? (
                         <span className="text-[10px] font-mono text-emerald-600 font-bold flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          28 FPS STREAM
+                          {hasRemoteWebRtcStream ? 'WEBRTC LIVE' : '28 FPS STREAM'}
                         </span>
                       ) : (
                         <span className="text-[10px] font-mono text-slate-400">
@@ -450,10 +501,19 @@ export const CCTVMonitoring: React.FC = () => {
               {/* Viewport: Live Stream Mode */}
               {viewMode === 'live_stream' ? (
                 <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border border-slate-800 select-none group">
+                  {/* Remote WebRTC Video Player (when phone streams native MediaStream) */}
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover ${hasRemoteWebRtcStream ? 'block' : 'hidden'}`}
+                  />
+
                   {/* High-Speed Hardware Accelerated Canvas for 24-30 FPS Live Stream */}
                   <canvas
                     ref={liveCanvasRef}
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover ${hasRemoteWebRtcStream ? 'hidden' : 'block'}`}
                   />
 
                   {/* High Tech HUD Overlay */}
@@ -463,7 +523,7 @@ export const CCTVMonitoring: React.FC = () => {
                       <div className="flex items-center gap-2 px-3 py-1 bg-black/70 backdrop-blur-md rounded-full border border-white/20">
                         <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
                         <span className="text-[11px] font-mono font-bold text-white uppercase">
-                          LIVE STREAM • {liveFps} FPS
+                          {hasRemoteWebRtcStream ? 'WEBRTC LIVE • 1080P' : `LIVE STREAM • ${liveFps} FPS`}
                         </span>
                         <span className="text-white/40 font-mono">|</span>
                         <span className="text-[10px] font-mono text-emerald-400">
@@ -496,7 +556,7 @@ export const CCTVMonitoring: React.FC = () => {
                       </div>
 
                       <div className="text-right text-[10px] font-mono text-emerald-400">
-                        ● LOW LATENCY ({liveFps} FPS)
+                        ● {hasRemoteWebRtcStream ? 'CROSS-DEVICE WEBRTC ONLINE' : `LOW LATENCY (${liveFps} FPS)`}
                       </div>
                     </div>
                   </div>
@@ -664,11 +724,11 @@ export const CCTVMonitoring: React.FC = () => {
                 Turn Smartphone into CCTV Camera Node
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Scan this QR code with your phone camera to launch the installable CCTV Node web app.
+                Scan this QR code with your phone camera to launch the installable CCTV Node web app and stream directly to this screen.
               </p>
             </div>
 
-            {/* QR Code Box */}
+            {/* QR Code Box with dynamic WebRTC Hub ID */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl inline-block mx-auto shadow-inner">
               <QRCodeSVG value={phoneNodeUrl} size={180} />
             </div>
@@ -678,18 +738,18 @@ export const CCTVMonitoring: React.FC = () => {
                 {phoneNodeUrl}
               </div>
               <p className="text-[11px] text-slate-400">
-                Point phone camera at corridor or classroom lights to stream live frames at 28 FPS to this dashboard.
+                Streams real-time 30 FPS video over WebRTC from any smartphone on 4G/Wi-Fi.
               </p>
             </div>
 
             <div className="flex gap-2">
               <a
-                href="/cctv-node"
+                href={phoneNodeUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
               >
-                <span>Open in New Tab</span>
+                <span>Open Node in New Tab</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
