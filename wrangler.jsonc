@@ -2,8 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "inframind-ai",
   "compatibility_date": "2026-08-28",
-  "observability": {
-    "enabled": true
+  "build": {
+    "command": "npm run build"
   },
   "assets": {
     "directory": "./dist",
