@@ -13,6 +13,7 @@ import {
   Users,
   Wrench,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTicketStore } from '../../store/ticketStore';
@@ -24,6 +25,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   const { selectedRole, currentUser } = useAuthStore();
   const { tickets } = useTicketStore();
+
+  const isMobileDrawer = Boolean(onClose);
 
   const openCount = tickets.filter((t) => t.status === 'open').length;
   const assignedCount = tickets.filter(
@@ -102,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     },
     {
       to: '/analytics-reports',
-      label: 'Analytics & PDF Reports',
+      label: 'Analytics & Reports',
       icon: FileSpreadsheet,
       roles: ['admin', 'manager'],
     },
@@ -117,7 +120,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   const visibleNav = navItems.filter((item) => item.roles.includes(selectedRole));
 
   return (
-    <aside className="w-64 border-r border-slate-200 bg-white flex flex-col h-[calc(100vh-4rem)] sticky top-16 select-none shadow-sm">
+    <aside
+      className={`w-full h-full bg-white flex flex-col select-none ${
+        isMobileDrawer ? '' : 'w-64 border-r border-slate-200 sticky top-16 h-[calc(100vh-4rem)] shadow-sm'
+      }`}
+    >
+      {/* Mobile Drawer Top Brand Bar */}
+      {isMobileDrawer && (
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-maroon-800 flex items-center justify-center font-serif font-black text-xs text-white">
+              MIT
+            </div>
+            <div>
+              <div className="font-extrabold text-xs text-maroon-950">MIT ACSC CampusCare</div>
+              <div className="text-[10px] text-slate-500">Alandi (D.), Pune</div>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       {/* Role Profile Info Card */}
       <div className="p-4 border-b border-slate-100 bg-slate-50/70">
         <div className="flex items-center gap-3">
@@ -136,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
 
       {/* Navigation List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
-        <div className="px-3 py-2 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+        <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
           Campus Modules
         </div>
 
@@ -176,12 +205,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       {/* Footer Banner */}
       <div className="p-3 border-t border-slate-100 bg-slate-50/50">
         <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <div className="flex items-center gap-1.5 text-maroon-900 text-xs font-bold mb-1">
+          <div className="flex items-center gap-1.5 text-maroon-900 text-xs font-bold mb-0.5">
             <Sparkles className="w-3.5 h-3.5 text-maroon-700" />
             <span>MIT ACSC Alandi</span>
           </div>
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            Smart India Hackathon • CCTV Vision AI & Predictive Maintenance
+            Smart India Hackathon • Vision AI & Predictive Maintenance
           </p>
         </div>
       </div>

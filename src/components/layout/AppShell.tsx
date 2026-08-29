@@ -21,10 +21,10 @@ export const AppShell: React.FC = () => {
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 lg:hidden flex">
             <div
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
               onClick={() => setMobileSidebarOpen(false)}
             />
-            <div className="relative w-64 max-w-[80vw] bg-white h-full shadow-2xl border-r border-slate-200 animate-in slide-in-from-left duration-200">
+            <div className="relative w-72 max-w-[85vw] bg-white h-full shadow-2xl border-r border-slate-200 z-10 flex flex-col animate-in slide-in-from-left duration-200">
               <Sidebar onClose={() => setMobileSidebarOpen(false)} />
             </div>
           </div>
