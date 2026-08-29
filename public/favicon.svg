@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="maroonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9b1b36" />
+      <stop offset="100%" stop-color="#6f192d" />
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="url(#maroonGrad)" />
+  <!-- Academic Cap / MIT Logo Motif -->
+  <path d="M50 20 L22 36 L50 52 L78 36 Z" fill="#ffffff" />
+  <path d="M30 46 L30 64 Q50 78 70 64 L70 46 L50 58 Z" fill="#fbe6e9" />
+  <circle cx="78" cy="38" r="4.5" fill="#facc15" />
+  <path d="M78 42 L78 62" stroke="#facc15" stroke-width="3" stroke-linecap="round" />
+</svg>
