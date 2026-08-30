@@ -1,202 +1,133 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Video,
-  Sparkles,
-  Zap,
-  Power,
-  RefreshCw,
-  AlertTriangle,
-  CheckCircle2,
   Camera,
-  Smartphone,
-  QrCode,
-  ExternalLink,
-  Battery,
-  Layers,
-  ChevronDown,
-  Maximize2,
-  Grid,
-  Radio,
   Play,
-  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  Sparkles,
+  Smartphone,
+  Power,
+  Grid,
+  Zap,
   HelpCircle,
-  Wifi,
 } from 'lucide-react';
 import { useCCTVStore } from '../../store/cctvStore';
 import { useAuthStore } from '../../store/authStore';
-import { CCTVCamera } from '../../types/cctv';
+import { CCTVCamera, CCTVSnapshotRecord } from '../../types/cctv';
+import { cctvStreamService, LiveFramePayload } from '../../lib/cctvStreamService';
 import { QRCodeSVG } from 'qrcode.react';
-import { cctvStreamService, LiveFramePayload, DEFAULT_HUB_ID } from '../../lib/cctvStreamService';
 
 export const CCTVMonitoring: React.FC = () => {
   const {
     cameras,
     selectedCameraId,
     selectCamera,
-    activeElectricityGrid,
-    toggleElectricityGrid,
     runCameraAnalysis,
-    setPresetScenario,
     updateCameraImages,
-    registerPhoneNode,
+    toggleElectricityGrid,
     isAnalyzing,
   } = useCCTVStore();
 
   const { customGeminiApiKey } = useAuthStore();
-  const [viewMode, setViewMode] = useState<'live_stream' | 'comparator'>('live_stream');
-  const [isQuadView, setIsQuadView] = useState(false);
-  const [sliderPos, setSliderPos] = useState(50);
-  const [lastAnalyzedResult, setLastAnalyzedResult] = useState<any>(null);
+
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
-  const [liveTimestamp, setLiveTimestamp] = useState<string>('');
+  const [isQuadView, setIsQuadView] = useState(false);
+  const [hubId, setHubId] = useState<string>('hub-main-01');
   const [liveFps, setLiveFps] = useState<number>(28);
   const [liveLatencyMs, setLiveLatencyMs] = useState<number>(24);
-  const [hubId, setHubId] = useState<string>(DEFAULT_HUB_ID);
+  const [liveTimestamp, setLiveTimestamp] = useState<string>('');
+  const [lastAnalyzedResult, setLastAnalyzedResult] = useState<CCTVSnapshotRecord | null>(null);
   const [hasRemoteWebRtcStream, setHasRemoteWebRtcStream] = useState<boolean>(false);
 
-  const liveCanvasRef = useRef<HTMLCanvasElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const latestFrameDataRef = useRef<string>('');
+  const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const latestFrameDataRef = useRef<string | null>(null);
 
-  const selectedCam: CCTVCamera =
-    cameras.find((c) => c.id === selectedCameraId) || cameras[0];
+  const selectedCam =
+    cameras.find((c) => c.id === selectedCameraId) || cameras[0] || ({} as CCTVCamera);
 
-  // Initialize WebRTC Hub & Listen for Phone Cameras across network
+  // Initialize WebRTC Hub & Listeners
   useEffect(() => {
-    cctvStreamService
-      .initHub(DEFAULT_HUB_ID, (remoteStream, fromPeerId) => {
-        console.log('🎥 Attached WebRTC Stream from Phone Camera:', fromPeerId);
-        setHasRemoteWebRtcStream(true);
+    const existingHub = localStorage.getItem('cctv_hub_id') || `hub-${Date.now().toString(36)}`;
+    localStorage.setItem('cctv_hub_id', existingHub);
+    setHubId(existingHub);
 
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-          remoteVideoRef.current.play().catch((e) => console.warn('Play video error:', e));
-        }
+    cctvStreamService.initHub(existingHub);
 
-        // Auto register phone node in list if not already present
-        const phoneCamId = fromPeerId.startsWith('CAM-') ? fromPeerId : `CAM-PHONE-${fromPeerId.slice(-4)}`;
-        registerPhoneNode({
-          id: phoneCamId,
-          name: `📱 Phone CCTV (${fromPeerId.slice(-4)})`,
-          building: 'Main Academic Building (MAB)',
-          floor: 1,
-          wing: 'east',
-          areaDescription: 'Live Smartphone Stream (Cross-Device WebRTC)',
-          isPhoneNode: true,
-          isLiveStreaming: true,
-          deviceBattery: 90,
-        });
+    // 1. Direct WebRTC MediaStream
+    const unsubscribeStream = cctvStreamService.subscribeToStream((stream: MediaStream) => {
+      setHasRemoteWebRtcStream(true);
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = stream;
+        remoteVideoRef.current.play().catch(() => {});
+      }
+    });
 
-        selectCamera(phoneCamId);
-      })
-      .then((id) => setHubId(id));
+    // 2. High-speed 24-30 FPS Canvas Frame Decoder
+    const unsubscribeFrames = cctvStreamService.subscribeToAllFrames((frame: LiveFramePayload) => {
+      latestFrameDataRef.current = frame.frameDataUrl;
+      const calcFps = cctvStreamService.getFps(frame.cameraId);
+      setLiveFps(calcFps || 28);
+      setLiveLatencyMs(Math.max(12, Math.floor(Date.now() - frame.timestamp)));
+      setLiveTimestamp(new Date(frame.timestamp).toLocaleTimeString());
 
-    return () => {
-      // Keep hub alive across renders
-    };
-  }, [registerPhoneNode, selectCamera]);
-
-  // Subscribe to High-Speed 24-30 FPS Real-Time Frames across all channels
-  useEffect(() => {
-    let frameTimes: number[] = [];
-    latestFrameDataRef.current = selectedCam.currentSnapshotURL;
-
-    // Draw initial / current snapshot to canvas
-    const drawSnapshot = (url: string) => {
-      if (!liveCanvasRef.current) return;
-      const img = new Image();
-      img.onload = () => {
-        if (liveCanvasRef.current) {
-          const canvas = liveCanvasRef.current;
-          const ctx = canvas.getContext('2d', { alpha: false });
-          if (ctx) {
-            if (canvas.width !== (img.width || 640) || canvas.height !== (img.height || 360)) {
-              canvas.width = img.width || 640;
-              canvas.height = img.height || 360;
-            }
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          }
-        }
-      };
-      img.src = url;
-    };
-
-    if (selectedCam.currentSnapshotURL) {
-      drawSnapshot(selectedCam.currentSnapshotURL);
-    }
-
-    // Subscribe to all incoming frames (from WebRTC DataChannel, BroadcastChannel, and local loop)
-    const unsubscribeAll = cctvStreamService.subscribeToAllFrames((payload: LiveFramePayload) => {
-      // If the incoming frame belongs to current selected camera OR if current camera is a phone node
-      const isTargetCam =
-        payload.cameraId === selectedCam.id ||
-        (selectedCam.isPhoneNode && payload.cameraId.includes('PHONE'));
-
-      if (isTargetCam) {
-        latestFrameDataRef.current = payload.frameDataUrl;
-
-        // Render directly onto canvas
-        if (liveCanvasRef.current && !(selectedCam.isPhoneNode && hasRemoteWebRtcStream)) {
+      if (liveCanvasRef.current && frame.frameDataUrl) {
+        const canvas = liveCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
           const img = new Image();
           img.onload = () => {
-            if (liveCanvasRef.current) {
-              const canvas = liveCanvasRef.current;
-              const ctx = canvas.getContext('2d', { alpha: false });
-              if (ctx) {
-                if (canvas.width !== 640 || canvas.height !== 360) {
-                  canvas.width = 640;
-                  canvas.height = 360;
-                }
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              }
+            if (canvas.width !== img.width || canvas.height !== img.height) {
+              canvas.width = img.width || 640;
+              canvas.height = img.height || 480;
             }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           };
-          img.src = payload.frameDataUrl;
-        }
-
-        // Calculate Real-Time Latency and FPS
-        const now = Date.now();
-        const latency = Math.max(6, Math.min(80, now - payload.timestamp));
-        setLiveLatencyMs(latency);
-
-        frameTimes.push(now);
-        if (frameTimes.length > 25) {
-          frameTimes.shift();
-          const elapsed = (now - frameTimes[0]) / 1000;
-          if (elapsed > 0) {
-            const calculatedFps = Math.round(frameTimes.length / elapsed);
-            setLiveFps(Math.min(30, Math.max(22, calculatedFps)));
-          }
+          img.src = frame.frameDataUrl;
         }
       }
     });
 
     return () => {
-      unsubscribeAll();
+      unsubscribeStream();
+      unsubscribeFrames();
     };
-  }, [selectedCam.id, selectedCam.currentSnapshotURL, selectedCam.isPhoneNode, hasRemoteWebRtcStream]);
-
-  // Live timer tick for on-screen CCTV clock
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setLiveTimestamp(new Date().toLocaleTimeString());
-    }, 1000);
-    return () => clearInterval(timer);
   }, []);
 
+  // Fallback draw default camera snapshot on canvas when no phone frame arrives
+  useEffect(() => {
+    if (selectedCam && !selectedCam.isPhoneNode && liveCanvasRef.current) {
+      const canvas = liveCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          canvas.width = img.width || 640;
+          canvas.height = img.height || 480;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = selectedCam.currentSnapshotURL || selectedCam.referenceImageURL;
+      }
+    }
+  }, [selectedCam]);
+
   const handleRunAnalysis = async () => {
+    if (!selectedCam) return;
+
     try {
-      // Grab fresh frame from video element or canvas
-      if (hasRemoteWebRtcStream && remoteVideoRef.current && remoteVideoRef.current.readyState >= 2) {
-        const snapCanvas = document.createElement('canvas');
-        snapCanvas.width = 640;
-        snapCanvas.height = 360;
-        const ctx = snapCanvas.getContext('2d');
+      if (selectedCam.isPhoneNode && remoteVideoRef.current && hasRemoteWebRtcStream) {
+        const video = remoteVideoRef.current;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.drawImage(remoteVideoRef.current, 0, 0, 640, 360);
-          const freshDataUrl = snapCanvas.toDataURL('image/jpeg', 0.85);
-          latestFrameDataRef.current = freshDataUrl;
-          updateCameraImages(selectedCam.id, undefined, freshDataUrl);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const frameSnapshot = canvas.toDataURL('image/jpeg', 0.85);
+          updateCameraImages(selectedCam.id, undefined, frameSnapshot);
         }
       } else if (latestFrameDataRef.current && latestFrameDataRef.current.startsWith('data:')) {
         updateCameraImages(selectedCam.id, undefined, latestFrameDataRef.current);
@@ -216,11 +147,8 @@ export const CCTVMonitoring: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
             Automated CCTV Night LED Vision AI
-            <span className="px-2.5 py-0.5 bg-maroon-50 text-maroon-800 text-xs font-mono font-bold rounded-md border border-maroon-200">
-              Gemini 2.0 Flash
-            </span>
           </h2>
           <p className="text-xs text-slate-500">
             Cross-device WebRTC live video streaming and intelligent LED defect diagnosis across campus corridors & classrooms
@@ -249,72 +177,70 @@ export const CCTVMonitoring: React.FC = () => {
                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
             }`}
           >
-            <Grid className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{isQuadView ? 'Single View' : 'Quad Cam Wall'}</span>
+            <Grid className="w-4 h-4" />
+            <span>Quad Cam Wall</span>
           </button>
 
-          {/* Power Option Dropdown Menu */}
-          <div className="relative inline-flex items-center">
+          {/* Mains Power Toggle */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <Zap className="w-3.5 h-3.5 text-amber-500" />
             <select
-              value={activeElectricityGrid ? 'on' : 'off'}
+              defaultValue="on"
               onChange={(e) => toggleElectricityGrid(e.target.value === 'on')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer focus:outline-none ${
-                activeElectricityGrid
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                  : 'bg-rose-50 text-rose-800 border-rose-300'
-              }`}
+              className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
             >
-              <option value="on">⚡ Power: Mains Active (ON)</option>
-              <option value="off">🔌 Power: Power Outage (OFF)</option>
+              <option value="on">Power: Mains Active (ON)</option>
+              <option value="off">Power: Outage Test (OFF)</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* If Quad Control Room View is Active */}
+      {/* Main Viewport Content */}
       {isQuadView ? (
+        /* Quad Camera Wall View */
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-              <span>Campus CCTV Control Room — All Connected Cameras (28 FPS Live)</span>
+            <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <Grid className="w-4 h-4 text-maroon-800" />
+              <span>Campus Multi-Feed Matrix View</span>
             </h3>
-            <span className="text-xs font-mono text-slate-500">
-              {cameras.length} Active Feeds • Multi-stream
-            </span>
+            <button
+              onClick={() => setIsQuadView(false)}
+              className="text-xs text-maroon-800 font-bold hover:underline"
+            >
+              Back to Single Camera Focus →
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {cameras.map((cam) => (
+            {cameras.slice(0, 4).map((cam) => (
               <div
                 key={cam.id}
                 onClick={() => {
                   selectCamera(cam.id);
                   setIsQuadView(false);
                 }}
-                className="bg-slate-950 rounded-3xl overflow-hidden border-2 border-slate-800 relative cursor-pointer group shadow-lg aspect-video"
+                className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-md border border-slate-800 cursor-pointer group"
               >
                 <img
-                  src={cam.currentSnapshotURL}
+                  src={cam.currentSnapshotURL || cam.referenceImageURL}
                   alt={cam.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                 />
-
-                <div className="absolute inset-0 p-3 flex flex-col justify-between pointer-events-none bg-gradient-to-t from-black/80 via-transparent to-black/60">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 p-3 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-black/70 backdrop-blur-md rounded-full text-[10px] font-mono text-white">
-                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                      <span>{cam.isPhoneNode ? 'PHONE LIVE (28 FPS)' : 'IP CAM'}</span>
-                    </div>
-
+                    <span className="px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[10px] font-mono text-white">
+                      {cam.id}
+                    </span>
                     <span
-                      className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                      className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
                         cam.lastAnalysisResult === 'failure_detected'
-                          ? 'bg-rose-600 text-white'
-                          : 'bg-emerald-600 text-white'
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-emerald-500 text-white'
                       }`}
                     >
-                      {cam.lastAnalysisResult.toUpperCase()}
+                      {cam.lastAnalysisResult.replace('_', ' ')}
                     </span>
                   </div>
 
@@ -341,7 +267,7 @@ export const CCTVMonitoring: React.FC = () => {
               </span>
             </div>
 
-            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
               {cameras.map((cam) => {
                 const isSelected = cam.id === selectedCam.id;
                 const hasFailure = cam.lastAnalysisResult === 'failure_detected';
@@ -403,50 +329,12 @@ export const CCTVMonitoring: React.FC = () => {
                 );
               })}
             </div>
-
-            {/* Quick Scenario Preset Simulator */}
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
-              <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-maroon-700" />
-                <span>Simulate Preset Fault Scenarios:</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setPresetScenario(selectedCam.id, 'all_ok')}
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 font-medium text-slate-700 text-left transition"
-                >
-                  ✅ All LEDs Operational
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPresetScenario(selectedCam.id, 'two_leds_dead')}
-                  className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 font-medium text-rose-800 text-left transition"
-                >
-                  🚨 2 Corridor LEDs Dead
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPresetScenario(selectedCam.id, 'flicker_dim')}
-                  className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 font-medium text-amber-800 text-left transition"
-                >
-                  ⚠️ High Flicker / Dim 65%
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPresetScenario(selectedCam.id, 'power_cut')}
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-left transition"
-                >
-                  🔌 Complete Power Blackout
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Right 8 Cols: Live Interactive Vision Viewport & Analysis */}
-          <div className="lg:col-span-8 space-y-5">
-            <div className="white-card p-5 sm:p-6 rounded-3xl space-y-4 shadow-sm border border-slate-200">
-              {/* Viewfinder Header & View Mode Switcher */}
+          <div className="lg:col-span-8 space-y-4">
+            <div className="white-card p-4 sm:p-5 rounded-3xl space-y-4 shadow-sm border border-slate-200">
+              {/* Viewfinder Header & Run Diagnostic Action */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -463,53 +351,22 @@ export const CCTVMonitoring: React.FC = () => {
                   <p className="text-xs text-slate-500">{selectedCam.areaDescription}</p>
                 </div>
 
-                {/* View Mode Tabs */}
-                <div className="flex items-center gap-2">
-                  <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl text-xs gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('live_stream')}
-                      className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
-                        viewMode === 'live_stream'
-                          ? 'bg-white text-maroon-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Radio className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-                      <span>Live 28 FPS</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('comparator')}
-                      className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
-                        viewMode === 'comparator'
-                          ? 'bg-white text-maroon-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Layers className="w-3.5 h-3.5 text-maroon-700" />
-                      <span>Comparison Slider</span>
-                    </button>
-                  </div>
-
-                  {/* Gemini Trigger Button */}
-                  <button
-                    type="button"
-                    disabled={isAnalyzing}
-                    onClick={handleRunAnalysis}
-                    className="px-4 py-2 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition active:scale-95 disabled:opacity-50 shrink-0"
-                  >
-                    {isAnalyzing ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                    )}
-                    <span>
-                      {isAnalyzing ? 'Analyzing Image...' : 'Check LED Status (Gemini AI)'}
-                    </span>
-                  </button>
-                </div>
+                {/* AI Trigger Action Button */}
+                <button
+                  type="button"
+                  disabled={isAnalyzing}
+                  onClick={handleRunAnalysis}
+                  className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition active:scale-95 disabled:opacity-50 shrink-0"
+                >
+                  {isAnalyzing ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                  )}
+                  <span>
+                    {isAnalyzing ? 'Analyzing Frame...' : 'Check LED Status (AI Vision)'}
+                  </span>
+                </button>
               </div>
 
               {/* Live Phone Node Detection Alert Banner */}
@@ -535,131 +392,72 @@ export const CCTVMonitoring: React.FC = () => {
                 </div>
               )}
 
-              {/* Viewport: Live Stream Mode */}
-              {viewMode === 'live_stream' ? (
-                <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border border-slate-800 select-none group">
-                  {/* Remote WebRTC Video Player (when phone streams native MediaStream) */}
-                  <video
-                    ref={remoteVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover ${
-                      selectedCam.isPhoneNode && hasRemoteWebRtcStream ? 'block' : 'hidden'
-                    }`}
-                  />
+              {/* Viewport: Live Stream Monitor */}
+              <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border border-slate-800 select-none group">
+                {/* Remote WebRTC Video Player */}
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover ${
+                    selectedCam.isPhoneNode && hasRemoteWebRtcStream ? 'block' : 'hidden'
+                  }`}
+                />
 
-                  {/* High-Speed Hardware Accelerated Canvas for 24-30 FPS Live Stream */}
-                  <canvas
-                    ref={liveCanvasRef}
-                    className={`w-full h-full object-cover ${
-                      selectedCam.isPhoneNode && hasRemoteWebRtcStream ? 'hidden' : 'block'
-                    }`}
-                  />
+                {/* High-Speed Hardware Accelerated Canvas for 24-30 FPS Live Stream */}
+                <canvas
+                  ref={liveCanvasRef}
+                  className={`w-full h-full object-cover ${
+                    selectedCam.isPhoneNode && hasRemoteWebRtcStream ? 'hidden' : 'block'
+                  }`}
+                />
 
-                  {/* High Tech HUD Overlay */}
-                  <div className="absolute inset-0 p-4 flex flex-col justify-between pointer-events-none bg-gradient-to-b from-black/60 via-transparent to-black/70">
-                    {/* Top HUD Bar */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 px-3 py-1 bg-black/70 backdrop-blur-md rounded-full border border-white/20">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                        <span className="text-[11px] font-mono font-bold text-white uppercase">
-                          {hasRemoteWebRtcStream ? 'WEBRTC LIVE • 1080P' : `LIVE STREAM • ${liveFps} FPS`}
-                        </span>
-                        <span className="text-white/40 font-mono">|</span>
-                        <span className="text-[10px] font-mono text-emerald-400">
-                          LATENCY: {liveLatencyMs}ms
-                        </span>
+                {/* HUD Overlay */}
+                <div className="absolute inset-0 p-4 flex flex-col justify-between pointer-events-none bg-gradient-to-b from-black/60 via-transparent to-black/70">
+                  {/* Top HUD Bar */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 px-3 py-1 bg-black/70 backdrop-blur-md rounded-full border border-white/20">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                      <span className="text-[11px] font-mono font-bold text-white uppercase">
+                        {hasRemoteWebRtcStream ? 'WEBRTC LIVE • 1080P' : `LIVE STREAM • ${liveFps} FPS`}
+                      </span>
+                      <span className="text-white/40 font-mono">|</span>
+                      <span className="text-[10px] font-mono text-emerald-400">
+                        LATENCY: {liveLatencyMs}ms
+                      </span>
+                    </div>
+
+                    <div className="px-3 py-1 bg-black/70 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-mono text-white">
+                      {liveTimestamp || new Date().toLocaleTimeString()}
+                    </div>
+                  </div>
+
+                  {/* Center Targeting Box */}
+                  <div className="self-center flex items-center justify-center opacity-25">
+                    <div className="w-20 h-20 border border-white/80 rounded-2xl relative">
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t border-white/80" />
+                      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l border-white/80" />
+                    </div>
+                  </div>
+
+                  {/* Bottom HUD Bar */}
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-white drop-shadow">
+                        {selectedCam.name}
                       </div>
-
-                      <div className="px-3 py-1 bg-black/70 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-mono text-white">
-                        {liveTimestamp || new Date().toLocaleTimeString()}
+                      <div className="text-[10px] text-slate-300 font-mono">
+                        {selectedCam.building} • Floor {selectedCam.floor} ({selectedCam.wing.toUpperCase()} Wing)
                       </div>
                     </div>
 
-                    {/* Center Targeting Box */}
-                    <div className="self-center flex items-center justify-center opacity-30">
-                      <div className="w-20 h-20 border border-white/80 rounded-2xl relative">
-                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t border-white/80" />
-                        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l border-white/80" />
-                      </div>
-                    </div>
-
-                    {/* Bottom HUD Bar */}
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <div className="text-xs font-bold text-white drop-shadow">
-                          {selectedCam.name}
-                        </div>
-                        <div className="text-[10px] text-slate-300 font-mono">
-                          {selectedCam.building} • Floor {selectedCam.floor} ({selectedCam.wing.toUpperCase()} Wing)
-                        </div>
-                      </div>
-
-                      <div className="text-right text-[10px] font-mono text-emerald-400">
-                        ● {hasRemoteWebRtcStream ? 'CROSS-DEVICE WEBRTC ONLINE' : `LOW LATENCY (${liveFps} FPS)`}
-                      </div>
+                    <div className="text-right text-[10px] font-mono text-emerald-400">
+                      ● {hasRemoteWebRtcStream ? 'CROSS-DEVICE WEBRTC ONLINE' : `LOW LATENCY (${liveFps} FPS)`}
                     </div>
                   </div>
                 </div>
-              ) : (
-                /* Viewport: Comparative Slider Mode */
-                <div className="space-y-2">
-                  <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-inner border border-slate-800 select-none">
-                    {/* Reference Image (Baseline ON) */}
-                    <img
-                      src={selectedCam.referenceImageURL}
-                      alt="Baseline Reference"
-                      className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                    />
-
-                    {/* Current Live Snapshot with Clip Path */}
-                    <div
-                      className="absolute inset-0 overflow-hidden pointer-events-none"
-                      style={{ clipPath: `inset(0 0 0 ${sliderPos}%)` }}
-                    >
-                      <img
-                        src={selectedCam.currentSnapshotURL}
-                        alt="Current Night Snapshot"
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                    </div>
-
-                    {/* Overlay Badges */}
-                    <div className="absolute top-3 left-3 px-2.5 py-1 bg-slate-900/80 backdrop-blur-md rounded-lg text-[10px] font-mono font-bold text-white border border-white/20">
-                      BASELINE (LIGHTS ON)
-                    </div>
-                    <div className="absolute top-3 right-3 px-2.5 py-1 bg-maroon-950/80 backdrop-blur-md rounded-lg text-[10px] font-mono font-bold text-amber-300 border border-amber-500/30">
-                      LIVE CAPTURE
-                    </div>
-
-                    {/* Slider Line Divider */}
-                    <div
-                      className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg pointer-events-none"
-                      style={{ left: `${sliderPos}%` }}
-                    >
-                      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-white text-maroon-900 flex items-center justify-center shadow-lg border border-slate-300 text-xs font-bold">
-                        ↔
-                      </div>
-                    </div>
-
-                    {/* Transparent Slider Range Input */}
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={sliderPos}
-                      onChange={(e) => setSliderPos(Number(e.target.value))}
-                      className="absolute inset-0 opacity-0 cursor-ew-resize w-full h-full"
-                    />
-                  </div>
-
-                  <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono">
-                    <span>← Drag slider left/right to compare baseline vs night snapshot</span>
-                    <span>Position: {sliderPos}%</span>
-                  </div>
-                </div>
-              )}
+              </div>
 
               {/* Analysis Result Box */}
               {lastAnalyzedResult && (
@@ -687,11 +485,8 @@ export const CCTVMonitoring: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-mono text-[10px] font-bold">
+                      <span className="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-lg font-mono text-[11px] font-bold">
                         Confidence: {Math.round(lastAnalyzedResult.confidenceScore * 100)}%
-                      </span>
-                      <span className="px-2 py-0.5 bg-maroon-800 text-white rounded font-mono text-[10px] font-bold">
-                        Gemini 2.0 Flash
                       </span>
                     </div>
                   </div>
@@ -718,17 +513,8 @@ export const CCTVMonitoring: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 text-xs">
-                    <div className="font-bold text-slate-800">Detected Issues:</div>
-                    <ul className="list-disc list-inside text-slate-600 space-y-0.5">
-                      {lastAnalyzedResult.detectedIssues.map((issue: string, idx: number) => (
-                        <li key={idx}>{issue}</li>
-                      ))}
-                    </ul>
-                  </div>
-
                   <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
-                    <div className="font-bold text-maroon-900">Gemini 2.0 Flash Recommendation:</div>
+                    <div className="font-bold text-maroon-900">AI Diagnostic Summary:</div>
                     <div className="text-slate-600 leading-relaxed">
                       {lastAnalyzedResult.geminiExplanation}
                     </div>
@@ -755,48 +541,53 @@ export const CCTVMonitoring: React.FC = () => {
           <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 space-y-5 text-center">
             <button
               onClick={() => setIsPairModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-900 rounded-xl"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-900 rounded-xl text-sm"
             >
               ✕
             </button>
 
-            <div className="w-14 h-14 rounded-2xl bg-maroon-50 text-maroon-800 flex items-center justify-center mx-auto ring-4 ring-maroon-100">
-              <Smartphone className="w-7 h-7" />
-            </div>
-
-            <div>
-              <h3 className="text-lg font-extrabold text-slate-900">
-                Turn Smartphone into CCTV Camera Node
+            <div className="space-y-1.5">
+              <div className="w-12 h-12 rounded-2xl bg-maroon-50 text-maroon-800 flex items-center justify-center mx-auto shadow-xs">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900">
+                Connect Smartphone as CCTV Node
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Scan this QR code with your phone camera to launch the installable CCTV Node web app and stream directly to this screen.
+              <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                Scan this QR code with your phone camera or open the link to start 28+ FPS live video streaming
               </p>
             </div>
 
-            {/* QR Code Box with dynamic WebRTC Hub ID */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl inline-block mx-auto shadow-inner">
-              <QRCodeSVG value={phoneNodeUrl} size={180} />
+            {/* Render QR Code */}
+            <div className="p-4 bg-white border-2 border-dashed border-maroon-300 rounded-2xl inline-block shadow-inner">
+              <QRCodeSVG value={phoneNodeUrl} size={180} level="M" />
             </div>
 
             <div className="space-y-2 text-xs">
-              <div className="font-mono text-slate-600 bg-slate-100 p-2 rounded-xl truncate">
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-mono text-[11px] text-slate-700 break-all select-all">
                 {phoneNodeUrl}
               </div>
-              <p className="text-[11px] text-slate-400">
-                Streams real-time 30 FPS video over WebRTC from any smartphone on 4G/Wi-Fi.
-              </p>
-            </div>
 
-            <div className="flex gap-2">
-              <a
-                href={phoneNodeUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
-              >
-                <span>Open Node in New Tab</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(phoneNodeUrl);
+                    alert('Phone CCTV Node URL copied to clipboard!');
+                  }}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition text-xs"
+                >
+                  Copy URL
+                </button>
+                <a
+                  href={phoneNodeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 py-2 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl transition text-xs flex items-center justify-center gap-1"
+                >
+                  <span>Open in Tab →</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
