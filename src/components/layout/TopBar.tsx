@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   LogOut,
   Menu,
-  Users,
-  ArrowRight,
   GraduationCap,
   UserCheck,
   Wrench,
@@ -37,7 +35,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
   const { currentUser, selectedRole, logout } = useAuthStore();
   const { tickets } = useTicketStore();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotificationStore();
+  const { notifications, markAsRead, markAllAsRead, clearAll } = useNotificationStore();
 
   const [isSosOpen, setIsSosOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -47,6 +45,35 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
   const criticalCount = tickets.filter((t) => t.priority === 'critical' && t.status !== 'resolved').length;
   const RoleIcon = ROLE_ICON_MAP[selectedRole] || GraduationCap;
   const isStudentOrTeacher = selectedRole === 'student' || selectedRole === 'teacher';
+
+  // Strict user-specific notification filtering
+  const myNotifications = useMemo(() => {
+    if (!currentUser) return [];
+    return notifications.filter((n) => {
+      // 1. Direct match with current user's UID
+      if (n.userId === currentUser.uid) return true;
+      // 2. Global system broadcast
+      if (n.userId === 'broadcast') return true;
+      // 3. Department technician match (e.g. user-electrician-01, user-plumber-01)
+      if (
+        currentUser.role === 'employee' &&
+        currentUser.department &&
+        n.userId === `user-${currentUser.department}-01`
+      ) {
+        return true;
+      }
+      // 4. Estate Manager / Admin work order notices
+      if (
+        (currentUser.role === 'manager' || currentUser.role === 'admin') &&
+        (n.userId === 'user-manager-01' || n.userId === 'user-admin-01')
+      ) {
+        return true;
+      }
+      return false;
+    });
+  }, [notifications, currentUser]);
+
+  const myUnreadCount = myNotifications.filter((n) => !n.isRead).length;
 
   return (
     <>
@@ -115,9 +142,9 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                 title="Notifications"
               >
                 <Bell className="w-4 h-4 text-slate-700" />
-                {unreadCount > 0 && (
+                {myUnreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-rose-600 text-white text-[10px] font-bold rounded-full animate-pulse ring-2 ring-white">
-                    {unreadCount}
+                    {myUnreadCount}
                   </span>
                 )}
               </button>
@@ -128,15 +155,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                     <div className="font-bold text-slate-900 flex items-center gap-1.5">
                       <Bell className="w-3.5 h-3.5 text-maroon-800" />
                       <span>Live Notifications</span>
-                      {unreadCount > 0 && (
+                      {myUnreadCount > 0 && (
                         <span className="px-1.5 py-0.2 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold rounded-full">
-                          {unreadCount} New
+                          {myUnreadCount} New
                         </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-1">
-                      {unreadCount > 0 && (
+                      {myUnreadCount > 0 && (
                         <button
                           onClick={markAllAsRead}
                           className="p-1 text-slate-500 hover:text-slate-900 rounded text-[11px] font-semibold flex items-center gap-1"
@@ -146,7 +173,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                           <span>Read All</span>
                         </button>
                       )}
-                      {notifications.length > 0 && (
+                      {myNotifications.length > 0 && (
                         <button
                           onClick={clearAll}
                           className="p-1 text-slate-400 hover:text-rose-600 rounded text-[11px]"
@@ -159,12 +186,12 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                   </div>
 
                   <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
-                    {notifications.length === 0 ? (
+                    {myNotifications.length === 0 ? (
                       <div className="p-4 text-center text-slate-400 text-xs">
-                        No notifications yet.
+                        No notifications for your account.
                       </div>
                     ) : (
-                      notifications.slice(0, 15).map((notif) => (
+                      myNotifications.slice(0, 15).map((notif) => (
                         <div
                           key={notif.id}
                           onClick={() => {
@@ -176,7 +203,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                               } else if (selectedRole === 'employee') {
                                 navigate('/assigned-tasks');
                               } else {
-                                navigate('/tickets');
+                                navigate('/assigned-tasks');
                               }
                             }
                           }}
@@ -244,19 +271,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                     </div>
                   </div>
 
-                  {/* Switch Portal Link */}
-                  <Link
-                    to="/portals"
-                    onClick={() => setShowProfileMenu(false)}
-                    className="w-full p-2.5 rounded-xl bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 flex items-center justify-between font-bold transition"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-maroon-800" />
-                      <span>Portals & Users Gateway</span>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-maroon-800" />
-                  </Link>
-
                   <div className="py-1 space-y-1 text-slate-600">
                     <div className="flex justify-between py-1">
                       <span>Active Tickets:</span>
@@ -268,14 +282,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                     </div>
                   </div>
 
+                  {/* Direct Sign Out Button */}
                   <button
                     onClick={() => {
                       setShowProfileMenu(false);
                       logout();
                     }}
-                    className="w-full p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 flex items-center justify-center gap-2 font-semibold transition"
+                    className="w-full p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 flex items-center justify-center gap-2 font-bold transition border border-slate-200 hover:border-rose-200"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
+                    <LogOut className="w-4 h-4" />
                     Sign Out
                   </button>
                 </div>

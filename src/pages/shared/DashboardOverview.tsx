@@ -469,10 +469,10 @@ export const DashboardOverview: React.FC = () => {
                   <span>My Assigned Tasks</span>
                 </button>
                 <button
-                  onClick={() => navigate('/portals')}
+                  onClick={() => navigate('/asset-registry')}
                   className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
                 >
-                  <span>Portals Directory</span>
+                  <span>Asset Registry & QR</span>
                 </button>
               </>
             ) : selectedRole === 'manager' ? (
