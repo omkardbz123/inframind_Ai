@@ -26,8 +26,10 @@ import { useAssetStore } from '../../store/assetStore';
 import { useCCTVStore } from '../../store/cctvStore';
 import { COLLEGE_CONFIG } from '../../lib/constants';
 import { QRScannerModal } from '../../components/common/QRScannerModal';
+import { AIChatComplaintModal } from '../../components/common/AIChatComplaintModal';
 import { Asset } from '../../types/asset';
 import { downloadTicketReportPDF } from '../../lib/pdfGenerator';
+import { Bot, Mic } from 'lucide-react';
 
 export const DashboardOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -37,6 +39,7 @@ export const DashboardOverview: React.FC = () => {
   const { cameras } = useCCTVStore();
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [ratingModalTicketId, setRatingModalTicketId] = useState<string | null>(null);
   const [ratingScore, setRatingScore] = useState<number>(5);
   const [ratingComment, setRatingComment] = useState('Quick fix by maintenance team.');
@@ -94,22 +97,66 @@ export const DashboardOverview: React.FC = () => {
             </div>
 
             {/* Primary Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto shrink-0">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto shrink-0">
+              <button
+                onClick={() => setIsAIChatOpen(true)}
+                className="px-5 py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20 transition active:scale-95 border border-amber-300"
+              >
+                <Bot className="w-4 h-4 text-maroon-950 shrink-0" />
+                <span>Talk with AI (Voice & Chat)</span>
+                <span className="px-1.5 py-0.5 bg-maroon-900 text-amber-300 rounded-full text-[9px] font-mono font-bold">
+                  🎙️ AI Mic
+                </span>
+              </button>
+
               <button
                 onClick={() => navigate('/report-fault')}
-                className="px-6 py-3.5 bg-white hover:bg-slate-50 text-maroon-900 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
+                className="px-5 py-3.5 bg-white hover:bg-slate-50 text-maroon-900 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
               >
                 <PlusCircle className="w-4 h-4 text-maroon-800 shrink-0" />
-                <span>File a New Complaint</span>
+                <span>File a Complaint</span>
               </button>
+
               <button
                 onClick={() => setIsQRModalOpen(true)}
-                className="px-6 py-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+                className="px-5 py-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
               >
                 <QrCode className="w-4 h-4 shrink-0" />
-                <span>5s Equipment QR Scan</span>
+                <span>5s QR Scan</span>
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* AI Voice & Chatbot Feature Banner for Students/Teachers */}
+        <div
+          onClick={() => setIsAIChatOpen(true)}
+          className="p-5 bg-gradient-to-r from-amber-50 via-white to-amber-50/60 border-2 border-amber-200/80 hover:border-amber-400 rounded-3xl cursor-pointer transition-all shadow-xs group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-400 text-maroon-950 flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition">
+              <Bot className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-maroon-900 transition">
+                  Have a complaint? Speak or chat with AI to file it instantly!
+                </h4>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold rounded-md">
+                  Gemini Voice AI
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Just say e.g. <em>"Fan sparking in Room 102"</em> or <em>"Projector not working in Lab 3"</em> — the AI files and dispatches the work order automatically.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <span className="px-4 py-2 bg-maroon-800 group-hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition">
+              <Mic className="w-3.5 h-3.5 text-amber-300" />
+              <span>Open AI Chat & Voice →</span>
+            </span>
           </div>
         </div>
 
@@ -371,6 +418,12 @@ export const DashboardOverview: React.FC = () => {
           isOpen={isQRModalOpen}
           onClose={() => setIsQRModalOpen(false)}
           onScanAsset={handleQRScanned}
+        />
+
+        {/* AI Voice & Chatbot Complaint Modal */}
+        <AIChatComplaintModal
+          isOpen={isAIChatOpen}
+          onClose={() => setIsAIChatOpen(false)}
         />
       </div>
     );

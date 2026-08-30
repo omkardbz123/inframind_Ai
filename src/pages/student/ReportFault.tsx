@@ -39,6 +39,9 @@ const ICONS_MAP: Record<DepartmentType, React.ElementType> = {
   general: AlertTriangle,
 };
 
+import { AIChatComplaintModal } from '../../components/common/AIChatComplaintModal';
+import { Bot } from 'lucide-react';
+
 export const ReportFault: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
@@ -47,6 +50,7 @@ export const ReportFault: React.FC = () => {
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createdTicketData, setCreatedTicketData] = useState<any>(null);
 
@@ -190,6 +194,16 @@ export const ReportFault: React.FC = () => {
         {/* Quick Tools */}
         {step !== 4 && (
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAIChatOpen(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-xs flex items-center gap-1.5 transition border border-amber-300 active:scale-95"
+              title="Talk to AI Voice & Chat Assistant"
+            >
+              <Bot className="w-4 h-4 text-maroon-950" />
+              <span>AI Chat & Voice</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsQRModalOpen(true)}
@@ -561,6 +575,12 @@ export const ReportFault: React.FC = () => {
         isOpen={isQRModalOpen}
         onClose={() => setIsQRModalOpen(false)}
         onScanAsset={handleScannedAsset}
+      />
+
+      {/* AI Voice & Chatbot Complaint Modal */}
+      <AIChatComplaintModal
+        isOpen={isAIChatOpen}
+        onClose={() => setIsAIChatOpen(false)}
       />
     </div>
   );

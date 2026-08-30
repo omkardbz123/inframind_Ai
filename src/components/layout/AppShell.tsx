@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
+import { FloatingAIAssistantButton } from '../common/FloatingAIAssistantButton';
 
 export const AppShell: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -35,6 +36,9 @@ export const AppShell: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Floating AI Assistant for Students and Teachers */}
+      <FloatingAIAssistantButton />
 
       {/* Mobile Bottom Navigation Bar */}
       <MobileNav />
