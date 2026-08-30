@@ -666,19 +666,23 @@ export const CCTVMonitoring: React.FC = () => {
                 <div className="p-4 sm:p-5 rounded-2xl border bg-slate-50 space-y-3 animate-in fade-in zoom-in-95 duration-200">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
                     <div className="flex items-center gap-2">
-                      {lastAnalyzedResult.totalLEDsVisible === 0 ? (
-                        <HelpCircle className="w-5 h-5 text-amber-600 shrink-0" />
-                      ) : lastAnalyzedResult.analysisResult === 'all_ok' ? (
+                      {lastAnalyzedResult.analysisResult === 'all_ok' ? (
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                       ) : lastAnalyzedResult.analysisResult === 'power_outage' ? (
                         <Power className="w-5 h-5 text-slate-600 shrink-0" />
+                      ) : lastAnalyzedResult.analysisResult === 'inconclusive' ? (
+                        <HelpCircle className="w-5 h-5 text-amber-600 shrink-0" />
                       ) : (
                         <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
                       )}
                       <span className="font-extrabold text-sm text-slate-900 uppercase">
-                        {lastAnalyzedResult.totalLEDsVisible === 0
-                          ? 'DIAGNOSIS: NO LIGHTS DETECTED IN CAMERA VIEW'
-                          : `DIAGNOSIS: ${lastAnalyzedResult.analysisResult.replace('_', ' ')}`}
+                        {lastAnalyzedResult.analysisResult === 'all_ok'
+                          ? 'DIAGNOSIS: LIGHT IS ON & OPERATIONAL'
+                          : lastAnalyzedResult.analysisResult === 'failure_detected'
+                          ? 'DIAGNOSIS: LIGHT IS UNLIT / FAILED (OFF)'
+                          : lastAnalyzedResult.analysisResult === 'power_outage'
+                          ? 'DIAGNOSIS: BUILDING POWER OUTAGE'
+                          : 'DIAGNOSIS: NO LIGHT FIXTURE IN VIEW'}
                       </span>
                     </div>
 
@@ -687,7 +691,7 @@ export const CCTVMonitoring: React.FC = () => {
                         Confidence: {Math.round(lastAnalyzedResult.confidenceScore * 100)}%
                       </span>
                       <span className="px-2 py-0.5 bg-maroon-800 text-white rounded font-mono text-[10px] font-bold">
-                        Gemini 3.5 Flash Lite
+                        Gemini 2.0 Flash
                       </span>
                     </div>
                   </div>
