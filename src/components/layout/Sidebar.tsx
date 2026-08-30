@@ -117,12 +117,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       icon: Users,
       roles: ['admin', 'manager'],
     },
-    {
-      to: '/user-directory',
-      label: 'Staff Directory',
-      icon: Users,
-      roles: ['admin', 'manager'],
-    },
   ];
 
   const visibleNav = navItems.filter((item) => item.roles.includes(selectedRole));

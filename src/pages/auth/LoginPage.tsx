@@ -5,6 +5,7 @@ import {
   UserCheck,
   Shield,
   Wrench,
+  Briefcase,
   Sparkles,
   ArrowRight,
   Lock,
@@ -78,16 +79,16 @@ export const LoginPage: React.FC = () => {
         name: 'Dr. Deshpande (HOD Comp Sci)',
       },
       employee: {
-        email: 'rajesh.kamble@mitacsc.edu.in',
+        email: 'rajesh.electrician@mitacsc.edu.in',
         name: 'Rajesh Kamble (Senior Electrician)',
       },
       manager: {
-        email: 'estate.manager@mitacsc.edu.in',
-        name: 'Suresh Patil (Campus Estate Head)',
+        email: 'ramesh.manager@mitacsc.edu.in',
+        name: 'Er. Ramesh Kulkarni (Facilities Manager)',
       },
       admin: {
-        email: 'principal@mitacsc.edu.in',
-        name: 'Dr. B. B. Waphare (Principal)',
+        email: 'principal.admin@mitacsc.edu.in',
+        name: 'Dr. B. B. Waphare (Principal & Dean)',
       },
     };
 
@@ -307,13 +308,25 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('admin')}
+                onClick={() => handleQuickDemoLogin('manager')}
                 className="p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
+              >
+                <Briefcase className="w-4 h-4 text-purple-600 shrink-0" />
+                <div className="truncate">
+                  <div className="font-bold text-slate-900">Facilities Manager</div>
+                  <div className="text-[10px] text-slate-500 truncate">Er. Ramesh Kulkarni</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('admin')}
+                className="col-span-2 p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
               >
                 <Shield className="w-4 h-4 text-maroon-800 shrink-0" />
                 <div className="truncate">
                   <div className="font-bold text-slate-900">Principal / Admin</div>
-                  <div className="text-[10px] text-slate-500 truncate">Dr. B. B. Waphare</div>
+                  <div className="text-[10px] text-slate-500 truncate">Dr. B. B. Waphare (Principal & Dean)</div>
                 </div>
               </button>
             </div>
