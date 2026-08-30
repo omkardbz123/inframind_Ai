@@ -3,6 +3,7 @@ import { Ticket, TicketPriority, TicketStatus, TimelineEntry, FaultSource } from
 import { DepartmentType } from '../types/user';
 import { WingType } from '../types/location';
 import { sendTransactionalEmail } from '../lib/emailSimulator';
+import { useNotificationStore } from './notificationStore';
 
 interface CreateTicketParams {
   title: string;
@@ -61,6 +62,27 @@ interface TicketStoreState {
 
 const STORAGE_TICKETS_KEY = 'campuscare_tickets_store';
 
+// Setup Broadcast Channel for Cross-Tab / Cross-Device Ticket Sync
+let ticketChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    ticketChannel = new BroadcastChannel('campuscare_tickets_sync');
+  }
+} catch {
+  // BroadcastChannel fallback
+}
+
+// Department Default Technicians
+const DEPARTMENT_TECH_MAP: Record<DepartmentType, { id: string; name: string; email: string }> = {
+  electrical: { id: 'user-electrician-01', name: 'Rajesh Kamble (Senior Electrician)', email: 'facilities.electrical@mitacsc.edu.in' },
+  plumbing: { id: 'user-plumber-01', name: 'Suresh Patil (Plumbing Tech)', email: 'facilities.plumbing@mitacsc.edu.in' },
+  technical: { id: 'user-tech-01', name: 'Anil Shinde (IT & AV Tech)', email: 'facilities.it@mitacsc.edu.in' },
+  janitorial: { id: 'user-janitor-01', name: 'Kavita Shinde (Housekeeping Lead)', email: 'facilities.housekeeping@mitacsc.edu.in' },
+  furniture: { id: 'user-carpenter-01', name: 'Sunil More (Carpentry)', email: 'facilities.carpentry@mitacsc.edu.in' },
+  network: { id: 'user-network-01', name: 'Praveen Nair (Network Admin)', email: 'network.admin@mitacsc.edu.in' },
+  general: { id: 'user-electrician-01', name: 'Rajesh Kamble (Maintenance Lead)', email: 'facilities.maintenance@mitacsc.edu.in' },
+};
+
 function getSlaDeadline(priority: TicketPriority): string {
   const now = new Date();
   const hoursMap: Record<TicketPriority, number> = {
@@ -69,7 +91,7 @@ function getSlaDeadline(priority: TicketPriority): string {
     medium: 24,
     low: 72,
   };
-  now.setHours(now.getHours() + hoursMap[priority]);
+  now.setHours(now.getHours() + (hoursMap[priority] || 24));
   return now.toISOString();
 }
 
@@ -220,109 +242,6 @@ const INITIAL_TICKETS: Ticket[] = [
       },
     ],
   },
-  {
-    id: 'T-2026-0104',
-    title: 'AI Vision Alert: 2nd Floor East Corridor LED Tube Light Failure',
-    description: 'Gemini Vision AI automatic night CCTV comparison detected dead LED fixtures at position #3 and #7 in East corridor. Main electrical grid is verified operational.',
-    category: 'electrical',
-    subcategory: 'LED Tube Light',
-    priority: 'high',
-    status: 'assigned',
-    building: 'Main Academic Block (MAB)',
-    floor: 2,
-    wing: 'east',
-    locationDescription: '2nd Floor East Corridor (Between Room 202 and 205)',
-    reporterId: 'system-cctv-ai',
-    reporterName: 'Gemini CCTV Vision Node #02',
-    reporterEmail: 'cctv.ai@college.edu',
-    reporterRole: 'System AI Monitor',
-    assignedTo: 'user-electrician-01',
-    assignedToName: 'Rajesh Kamble (Senior Electrician)',
-    assignedDepartment: 'electrical',
-    photoURLs: ['https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80'],
-    createdAt: new Date(Date.now() - 7 * 3600 * 1000).toISOString(),
-    assignedAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
-    slaDeadline: getSlaDeadline('high'),
-    urgencyScore: 88,
-    isAutoDetected: true,
-    source: 'cctv',
-    aiAnalysis: 'High confidence (94%) lumen degradation. 2 out of 8 fixtures non-responsive during 02:00 AM nightly scan.',
-    timeline: [
-      {
-        id: 'tl-30',
-        action: 'created',
-        toStatus: 'open',
-        userId: 'system-cctv-ai',
-        userName: 'Gemini Vision AI',
-        comment: 'Automated defect ticket synthesized from CCTV comparative analysis.',
-        timestamp: new Date(Date.now() - 7 * 3600 * 1000).toISOString(),
-      },
-      {
-        id: 'tl-31',
-        action: 'assigned',
-        toStatus: 'assigned',
-        userId: 'user-manager-01',
-        userName: 'Er. Ramesh Kulkarni (Manager)',
-        comment: 'Auto-routed to night shift electrical staff.',
-        timestamp: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'T-2026-0098',
-    title: 'Washroom 1st Floor Flush Valve Jammed',
-    description: 'Gents washroom flush valve leaking water continuously into drain.',
-    category: 'plumbing',
-    subcategory: 'Flush Tank Issue',
-    priority: 'medium',
-    status: 'resolved',
-    building: 'Main Academic Block (MAB)',
-    floor: 1,
-    wing: 'west',
-    roomNumber: '113',
-    locationDescription: '1st Floor West Restroom Stall #2',
-    reporterId: 'user-student-01',
-    reporterName: 'Omkar Sharma',
-    reporterEmail: 'omkar.student@college.edu',
-    reporterRole: 'Student',
-    assignedTo: 'user-plumber-01',
-    assignedToName: 'Suresh Patil (Plumbing Tech)',
-    assignedDepartment: 'plumbing',
-    photoURLs: ['https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80'],
-    resolvedPhotoURLs: ['https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80'],
-    createdAt: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
-    assignedAt: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
-    resolvedAt: new Date(Date.now() - 14 * 3600 * 1000).toISOString(),
-    slaDeadline: getSlaDeadline('medium'),
-    urgencyScore: 45,
-    isAutoDetected: false,
-    source: 'manual',
-    resolutionNotes: 'Replaced faulty rubber diaphragm and calibrated pressure regulator valve. Leak tested successfully.',
-    actualCost: 280,
-    partsUsed: ['Jaquar Diaphragm Kit', 'Teflon Tape'],
-    feedbackRating: 5,
-    feedbackComment: 'Repaired very quickly on the same day. Great job!',
-    timeline: [
-      {
-        id: 'tl-40',
-        action: 'created',
-        toStatus: 'open',
-        userId: 'user-student-01',
-        userName: 'Omkar Sharma',
-        timestamp: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
-      },
-      {
-        id: 'tl-41',
-        action: 'resolved',
-        fromStatus: 'in_progress',
-        toStatus: 'resolved',
-        userId: 'user-plumber-01',
-        userName: 'Suresh Patil',
-        comment: 'Fixed diaphragm seal and tested water flow.',
-        timestamp: new Date(Date.now() - 14 * 3600 * 1000).toISOString(),
-      },
-    ],
-  },
 ];
 
 export const useTicketStore = create<TicketStoreState>((set, get) => {
@@ -337,7 +256,39 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
   }
 
   const persist = (tickets: Ticket[]) => {
-    localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(tickets));
+    try {
+      localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(tickets));
+    } catch {}
+  };
+
+  // 1. Cross-tab Broadcast listener
+  if (ticketChannel) {
+    ticketChannel.onmessage = (event) => {
+      const { type, payload } = event.data || {};
+      if (type === 'SYNC_TICKETS' && Array.isArray(payload)) {
+        set({ tickets: payload });
+      }
+    };
+  }
+
+  // 2. Cross-window storage event listener
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (event) => {
+      if (event.key === STORAGE_TICKETS_KEY && event.newValue) {
+        try {
+          const fresh: Ticket[] = JSON.parse(event.newValue);
+          set({ tickets: fresh });
+        } catch {}
+      }
+    });
+  }
+
+  const broadcastSync = (tickets: Ticket[]) => {
+    if (ticketChannel) {
+      try {
+        ticketChannel.postMessage({ type: 'SYNC_TICKETS', payload: tickets });
+      } catch {}
+    }
   };
 
   return {
@@ -355,6 +306,9 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       const newId = `T-2026-${String(state.tickets.length + 105).padStart(4, '0')}`;
       const nowIso = new Date().toISOString();
 
+      // Auto assign to department technician
+      const defaultTech = DEPARTMENT_TECH_MAP[params.category] || DEPARTMENT_TECH_MAP.electrical;
+
       const newTicket: Ticket = {
         id: newId,
         title: params.title,
@@ -362,7 +316,11 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
         category: params.category,
         subcategory: params.subcategory,
         priority: params.priority,
-        status: 'open',
+        status: 'assigned', // Automatically assign to technician
+        assignedTo: defaultTech.id,
+        assignedToName: defaultTech.name,
+        assignedDepartment: params.category,
+        assignedAt: nowIso,
         building: params.building,
         floor: params.floor,
         wing: params.wing,
@@ -389,7 +347,17 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             userId: params.reporterId,
             userName: params.reporterName,
             userRole: params.reporterRole,
-            comment: `Fault registered. SLA targeted for ${new Date(getSlaDeadline(params.priority)).toLocaleTimeString()}.`,
+            comment: `Fault registered by ${params.reporterName}. Auto-routed to ${defaultTech.name}.`,
+            timestamp: nowIso,
+          },
+          {
+            id: `tl-${Date.now() + 1}`,
+            action: 'assigned',
+            fromStatus: 'open',
+            toStatus: 'assigned',
+            userId: 'system-ai',
+            userName: 'CampusCare AI Dispatcher',
+            comment: `Assigned to ${defaultTech.name} (${params.category.toUpperCase()} Department).`,
             timestamp: nowIso,
           },
         ],
@@ -398,12 +366,52 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       const updated = [newTicket, ...state.tickets];
       set({ tickets: updated });
       persist(updated);
+      broadcastSync(updated);
 
-      // Dispatch simulated confirmation email with PDF attachment
+      // 1. Add notification to Student
+      const notifStore = useNotificationStore.getState();
+      notifStore.addNotification({
+        userId: params.reporterId,
+        title: `✅ Complaint #${newId} Registered`,
+        message: `Your report for ${params.subcategory} in ${params.building} has been assigned to ${defaultTech.name}.`,
+        type: 'ticket_created',
+        priority: params.priority === 'critical' ? 'urgent' : 'normal',
+        linkedTicketId: newId,
+      });
+
+      // 2. Add notification to Technician
+      notifStore.addNotification({
+        userId: defaultTech.id,
+        title: `🚨 New Task Assigned: #${newId}`,
+        message: `${params.subcategory} repair needed at ${params.building} (Room ${params.roomNumber || 'General'}). Target SLA: ${new Date(newTicket.slaDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+        type: 'ticket_assigned',
+        priority: params.priority === 'critical' ? 'urgent' : 'high',
+        linkedTicketId: newId,
+      });
+
+      // 3. Add notification to Estate Manager
+      notifStore.addNotification({
+        userId: 'user-manager-01',
+        title: `📋 New Work Order: #${newId}`,
+        message: `${params.reporterName} reported ${params.subcategory} in ${params.building}. Assigned to ${defaultTech.name}.`,
+        type: 'ticket_created',
+        priority: 'normal',
+        linkedTicketId: newId,
+      });
+
+      // 4. Dispatch simulated & live emails
       sendTransactionalEmail({
         to: params.reporterEmail,
         subject: `[Registered] CampusCare Fault Ticket #${newId}: ${params.title}`,
         template: 'TicketCreated',
+        ticket: newTicket,
+        hasPdfAttachment: true,
+      });
+
+      sendTransactionalEmail({
+        to: defaultTech.email,
+        subject: `[Task Assigned] #${newId}: ${params.title} (${params.priority.toUpperCase()})`,
+        template: 'TicketAssigned',
         ticket: newTicket,
         hasPdfAttachment: true,
       });
@@ -414,6 +422,8 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     assignTicket: (ticketId: string, assignedToId: string, assignedToName: string, managerName: string) => {
       const state = get();
       const nowIso = new Date().toISOString();
+
+      let modifiedTicket: Ticket | undefined;
 
       const updated = state.tickets.map((t) => {
         if (t.id === ticketId) {
@@ -428,7 +438,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             timestamp: nowIso,
           };
 
-          return {
+          modifiedTicket = {
             ...t,
             status: 'assigned' as TicketStatus,
             assignedTo: assignedToId,
@@ -436,12 +446,26 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             assignedAt: nowIso,
             timeline: [...t.timeline, newTimeline],
           };
+          return modifiedTicket;
         }
         return t;
       });
 
       set({ tickets: updated });
       persist(updated);
+      broadcastSync(updated);
+
+      if (modifiedTicket) {
+        const notifStore = useNotificationStore.getState();
+        notifStore.addNotification({
+          userId: assignedToId,
+          title: `🔧 Task Assigned: #${modifiedTicket.id}`,
+          message: `You were assigned: ${modifiedTicket.title} in ${modifiedTicket.building}.`,
+          type: 'ticket_assigned',
+          priority: 'high',
+          linkedTicketId: modifiedTicket.id,
+        });
+      }
     },
 
     updateTicketStatus: (
@@ -457,6 +481,8 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       const state = get();
       const nowIso = new Date().toISOString();
 
+      let targetTicket: Ticket | undefined;
+
       const updated = state.tickets.map((t) => {
         if (t.id === ticketId) {
           const newTimeline: TimelineEntry = {
@@ -470,7 +496,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             timestamp: nowIso,
           };
 
-          return {
+          targetTicket = {
             ...t,
             status: newStatus,
             resolutionNotes: notes || t.resolutionNotes,
@@ -481,12 +507,57 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             resolvedAt: newStatus === 'resolved' ? nowIso : t.resolvedAt,
             timeline: [...t.timeline, newTimeline],
           };
+          return targetTicket;
         }
         return t;
       });
 
       set({ tickets: updated });
       persist(updated);
+      broadcastSync(updated);
+
+      // If resolved, dispatch notifications and emails
+      if (newStatus === 'resolved' && targetTicket) {
+        const notifStore = useNotificationStore.getState();
+
+        // 1. Notify Student
+        notifStore.addNotification({
+          userId: targetTicket.reporterId,
+          title: `✅ Problem Resolved: #${targetTicket.id}`,
+          message: `Your complaint for ${targetTicket.subcategory} in ${targetTicket.building} has been resolved by ${userName}.`,
+          type: 'ticket_resolved',
+          priority: 'normal',
+          linkedTicketId: targetTicket.id,
+        });
+
+        // 2. Notify Estate Manager & Admin
+        notifStore.addNotification({
+          userId: 'user-manager-01',
+          title: `📋 Work Order #${targetTicket.id} Completed`,
+          message: `${userName} resolved ${targetTicket.subcategory} in ${targetTicket.building}. Notes: ${notes || 'Repaired successfully'}.`,
+          type: 'ticket_resolved',
+          priority: 'normal',
+          linkedTicketId: targetTicket.id,
+        });
+
+        // 3. Email to Student
+        sendTransactionalEmail({
+          to: targetTicket.reporterEmail,
+          subject: `[Resolved] Ticket #${targetTicket.id}: ${targetTicket.title}`,
+          template: 'TicketResolved',
+          ticket: targetTicket,
+          hasPdfAttachment: true,
+        });
+
+        // 4. Email to Estate Manager
+        sendTransactionalEmail({
+          to: 'facilities.manager@mitacsc.edu.in',
+          subject: `[Closed Work Order] Ticket #${targetTicket.id} - ${targetTicket.title}`,
+          template: 'TicketResolved',
+          ticket: targetTicket,
+          hasPdfAttachment: true,
+        });
+      }
     },
 
     addTicketComment: (ticketId: string, userId: string, userName: string, comment: string) => {
@@ -513,6 +584,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
 
       set({ tickets: updated });
       persist(updated);
+      broadcastSync(updated);
     },
 
     submitTicketFeedback: (ticketId: string, rating: number, comment?: string) => {
@@ -530,6 +602,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
 
       set({ tickets: updated });
       persist(updated);
+      broadcastSync(updated);
     },
 
     setFilters: (newFilters) => {

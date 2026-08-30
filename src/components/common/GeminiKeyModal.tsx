@@ -36,8 +36,10 @@ export const GeminiKeyModal: React.FC<GeminiKeyModalProps> = ({ isOpen, onClose 
             <Key className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-900">Gemini 3.5 Flash Lite</h3>
-            <p className="text-xs text-slate-500">Google AI Studio • Live Multimodal CCTV Vision</p>
+            <h3 className="text-base font-bold text-slate-900">Gemini 2.0 Flash</h3>
+            <p className="text-xs text-slate-500">
+              Configure your Google Gemini API Key for CCTV automated vision defect scans & intelligent voice complaint triage.
+            </p>
           </div>
         </div>
 
@@ -47,7 +49,7 @@ export const GeminiKeyModal: React.FC<GeminiKeyModalProps> = ({ isOpen, onClose 
             <span>Google AI Studio Key Connected</span>
           </div>
           <p className="text-[11px] leading-relaxed">
-            Running <strong>Gemini 3.5 Flash Lite</strong> with high-speed rate limits (up to 250,000 tokens/min) for real-time corridor illumination scans and voice report NLP.
+            Running <strong>Gemini 2.0 Flash</strong> with high-speed rate limits for real-time corridor illumination scans and voice report NLP.
           </p>
         </div>
 

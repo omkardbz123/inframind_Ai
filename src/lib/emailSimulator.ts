@@ -146,6 +146,59 @@ export function sendTransactionalEmail(params: {
         </div>
       </div>
     `;
+  } else if (template === 'TicketAssigned' && ticket) {
+    bodyHtml = `
+      <div style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 24px; color: #1e293b;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
+          <div style="background-color: #1e293b; padding: 22px; text-align: center; border-bottom: 3px solid #3b82f6;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 18px;">${COLLEGE_CONFIG.name} — Work Assignment</h2>
+            <p style="color: #93c5fd; margin: 4px 0 0 0; font-size: 12px;">Assigned to Technician: ${ticket.assignedToName || 'Campus Technician'}</p>
+          </div>
+          <div style="padding: 24px;">
+            <h3 style="color: #1e293b; margin-top: 0;">New Work Order #${ticket.id}: ${ticket.title}</h3>
+            <p>You have been assigned a campus maintenance task.</p>
+            
+            <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <table style="width: 100%; font-size: 13px;">
+                <tr><td style="color: #475569; font-weight: bold; width: 120px;">Location:</td><td><strong>${ticket.building} - Floor ${ticket.floor}, ${ticket.wing.toUpperCase()} Wing (Room ${ticket.roomNumber || 'General'})</strong></td></tr>
+                <tr><td style="color: #475569; font-weight: bold;">Equipment:</td><td><strong>${ticket.subcategory} (${ticket.category.toUpperCase()})</strong></td></tr>
+                <tr><td style="color: #475569; font-weight: bold;">Priority:</td><td><span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${ticket.priority.toUpperCase()}</span></td></tr>
+                <tr><td style="color: #475569; font-weight: bold;">SLA Deadline:</td><td><strong style="color: #d97706;">${new Date(ticket.slaDeadline).toLocaleString('en-IN')}</strong></td></tr>
+              </table>
+            </div>
+
+            <p style="font-size: 13px; color: #475569;">Description: <em>"${ticket.description}"</em></p>
+            <p style="font-size: 12px; color: #64748b;">Reported by: ${ticket.reporterName} (${ticket.reporterRole})</p>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (template === 'TicketResolved' && ticket) {
+    bodyHtml = `
+      <div style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 24px; color: #1e293b;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div style="background-color: #059669; padding: 22px; text-align: center; border-bottom: 3px solid #10b981;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 18px;">✅ Problem Resolved — ${COLLEGE_CONFIG.name}</h2>
+            <p style="color: #d1fae5; margin: 4px 0 0 0; font-size: 12px;">CampusCare Work Order #${ticket.id} Closed</p>
+          </div>
+          <div style="padding: 24px;">
+            <p>Dear <strong>${ticket.reporterName}</strong>,</p>
+            <p>Your reported maintenance issue has been inspected and resolved by our campus technician team.</p>
+            
+            <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <table style="width: 100%; font-size: 13px;">
+                <tr><td style="color: #065f46; font-weight: bold; width: 120px;">Equipment:</td><td><strong>${ticket.subcategory} (${ticket.category.toUpperCase()})</strong></td></tr>
+                <tr><td style="color: #065f46; font-weight: bold;">Location:</td><td><strong>${ticket.building} - Floor ${ticket.floor}, Room ${ticket.roomNumber || 'General'}</strong></td></tr>
+                <tr><td style="color: #065f46; font-weight: bold;">Resolved By:</td><td><strong>${ticket.assignedToName || 'Campus Technician'}</strong></td></tr>
+                <tr><td style="color: #065f46; font-weight: bold;">Resolution Notes:</td><td><em>${ticket.resolutionNotes || 'Repaired and verified operational.'}</em></td></tr>
+              </table>
+            </div>
+
+            <p style="font-size: 13px; color: #065f46; font-weight: bold;">Thank you for helping keep MIT ACSC campus safe and functional!</p>
+          </div>
+        </div>
+      </div>
+    `;
   } else if (template === 'LEDFailureAlert') {
     bodyHtml = `
       <div style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 24px; color: #0f172a;">

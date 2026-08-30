@@ -219,7 +219,7 @@ export const CCTVMonitoring: React.FC = () => {
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             Automated CCTV Night LED Vision AI
             <span className="px-2.5 py-0.5 bg-maroon-50 text-maroon-800 text-xs font-mono font-bold rounded-md border border-maroon-200">
-              Gemini 3.5 Flash Lite
+              Gemini 2.0 Flash
             </span>
           </h2>
           <p className="text-xs text-slate-500">
@@ -728,7 +728,7 @@ export const CCTVMonitoring: React.FC = () => {
                   </div>
 
                   <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
-                    <div className="font-bold text-maroon-900">Gemini 3.5 Flash Lite Recommendation:</div>
+                    <div className="font-bold text-maroon-900">Gemini 2.0 Flash Recommendation:</div>
                     <div className="text-slate-600 leading-relaxed">
                       {lastAnalyzedResult.geminiExplanation}
                     </div>

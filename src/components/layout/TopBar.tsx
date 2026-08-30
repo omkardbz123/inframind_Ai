@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Sparkles,
   AlertTriangle,
-  Mail,
-  Key,
   LogOut,
   Menu,
   Users,
-  Layers,
   ArrowRight,
   GraduationCap,
   UserCheck,
@@ -16,12 +12,13 @@ import {
   Briefcase,
   Shield,
   PlusCircle,
+  Bell,
+  Check,
+  Trash2,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { COLLEGE_CONFIG } from '../../lib/constants';
+import { useNotificationStore } from '../../store/notificationStore';
 import { EmergencySOSModal } from '../common/EmergencySOSModal';
-import { GeminiKeyModal } from '../common/GeminiKeyModal';
-import { EmailSentHistoryModal } from '../common/EmailSentHistoryModal';
 import { useTicketStore } from '../../store/ticketStore';
 
 const ROLE_ICON_MAP = {
@@ -38,13 +35,13 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
-  const { currentUser, selectedRole, logout, customGeminiApiKey } = useAuthStore();
+  const { currentUser, selectedRole, logout } = useAuthStore();
   const { tickets } = useTicketStore();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotificationStore();
 
   const [isSosOpen, setIsSosOpen] = useState(false);
-  const [isGeminiKeyOpen, setIsGeminiKeyOpen] = useState(false);
-  const [isEmailLogOpen, setIsEmailLogOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
 
   const openTicketsCount = tickets.filter((t) => t.status === 'open' || t.status === 'assigned').length;
   const criticalCount = tickets.filter((t) => t.priority === 'critical' && t.status !== 'resolved').length;
@@ -53,7 +50,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-sm">
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
         <div className="px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
           {/* Left: Mobile Menu & MIT ACSC Brand */}
           <div className="flex items-center gap-3">
@@ -79,33 +76,19 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 truncate hidden md:block">
-                  Smart Infrastructure • CCTV AI Vision • Predictive Maintenance
+                  Smart Infrastructure • CCTV AI Vision • Realtime Maintenance
                 </p>
               </div>
             </Link>
           </div>
 
-          {/* Middle: Active Role Badge & Portals Directory Navigation (Only for Staff/Management) */}
+          {/* Middle: Active Role Badge */}
           <div className="hidden lg:flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs">
+            <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs shadow-2xs">
               <RoleIcon className="w-3.5 h-3.5 text-maroon-800" />
               <span className="font-bold text-slate-900 capitalize">{selectedRole} Portal</span>
               <span className="text-[10px] font-mono text-emerald-700 font-bold">● Active</span>
             </div>
-
-            {!isStudentOrTeacher && (
-              <Link
-                to="/portals"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 text-xs font-bold transition shadow-xs"
-                title="Open Multi-Role Portals Directory"
-              >
-                <Users className="w-3.5 h-3.5 text-maroon-800" />
-                <span>Portals Directory</span>
-                <span className="px-1.5 py-0.2 bg-maroon-800 text-white text-[9px] rounded-full font-mono font-bold">
-                  5 Roles
-                </span>
-              </Link>
-            )}
           </div>
 
           {/* Right: Actions */}
@@ -114,57 +97,114 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
             {isStudentOrTeacher && (
               <Link
                 to="/report-fault"
-                className="px-3 py-1.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+                className="px-3.5 py-2 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">File Complaint</span>
               </Link>
             )}
 
-            {/* Admin/Manager specific buttons */}
-            {!isStudentOrTeacher && (
-              <>
-                {/* Portals Gateway Link for Mobile/Tablet */}
-                <Link
-                  to="/portals"
-                  className="lg:hidden p-2 rounded-xl bg-maroon-50 text-maroon-800 border border-maroon-200 text-xs font-bold flex items-center gap-1"
-                  title="Portals Gateway"
-                >
-                  <Users className="w-4 h-4 text-maroon-800" />
-                </Link>
-
-                {/* Gemini Key Config */}
-                <button
-                  onClick={() => setIsGeminiKeyOpen(true)}
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
-                    customGeminiApiKey
-                      ? 'bg-maroon-50 border-maroon-300 text-maroon-800'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                  title="Gemini 2.0 Flash AI Settings"
-                >
-                  <Key className="w-3.5 h-3.5 text-maroon-700" />
-                  <span className="hidden xl:inline text-[11px]">
-                    {customGeminiApiKey ? 'Gemini AI Active' : 'Gemini Key'}
+            {/* Real-time Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowNotificationMenu(!showNotificationMenu);
+                  setShowProfileMenu(false);
+                }}
+                className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 transition relative"
+                title="Notifications"
+              >
+                <Bell className="w-4 h-4 text-slate-700" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-rose-600 text-white text-[10px] font-bold rounded-full animate-pulse ring-2 ring-white">
+                    {unreadCount}
                   </span>
-                </button>
+                )}
+              </button>
 
-                {/* Email & PDF Logs */}
-                <button
-                  onClick={() => setIsEmailLogOpen(true)}
-                  className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
-                  title="Inspect Outbound Emails & PDF Work Orders"
-                >
-                  <Mail className="w-3.5 h-3.5 text-maroon-700" />
-                  <span className="hidden sm:inline text-[11px]">Email & PDF Logs</span>
-                </button>
-              </>
-            )}
+              {showNotificationMenu && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 p-3 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 text-xs animate-in fade-in duration-150 space-y-2.5">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Bell className="w-3.5 h-3.5 text-maroon-800" />
+                      <span>Live Notifications</span>
+                      {unreadCount > 0 && (
+                        <span className="px-1.5 py-0.2 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold rounded-full">
+                          {unreadCount} New
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllAsRead}
+                          className="p-1 text-slate-500 hover:text-slate-900 rounded text-[11px] font-semibold flex items-center gap-1"
+                          title="Mark all as read"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Read All</span>
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button
+                          onClick={clearAll}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded text-[11px]"
+                          title="Clear all"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-slate-400 text-xs">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.slice(0, 15).map((notif) => (
+                        <div
+                          key={notif.id}
+                          onClick={() => {
+                            markAsRead(notif.id);
+                            if (notif.linkedTicketId) {
+                              setShowNotificationMenu(false);
+                              if (selectedRole === 'student' || selectedRole === 'teacher') {
+                                navigate('/my-tickets');
+                              } else if (selectedRole === 'employee') {
+                                navigate('/assigned-tasks');
+                              } else {
+                                navigate('/tickets');
+                              }
+                            }
+                          }}
+                          className={`p-2.5 rounded-xl border transition cursor-pointer ${
+                            !notif.isRead
+                              ? 'bg-maroon-50/70 border-maroon-200'
+                              : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="font-bold text-slate-900 text-xs">{notif.title}</div>
+                            <span className="text-[9px] font-mono text-slate-400">
+                              {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-snug">{notif.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Emergency SOS Button */}
             <button
               onClick={() => setIsSosOpen(true)}
-              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition"
+              className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition"
               title="Broadcast Emergency Hazard"
             >
               <AlertTriangle className="w-3.5 h-3.5" />
@@ -174,7 +214,10 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
             {/* Profile Menu */}
             <div className="relative">
               <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                onClick={() => {
+                  setShowProfileMenu(!showProfileMenu);
+                  setShowNotificationMenu(false);
+                }}
                 className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition"
               >
                 <div className="w-7 h-7 rounded-lg bg-maroon-800 text-white font-bold text-xs flex items-center justify-center">
@@ -242,10 +285,8 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
         </div>
       </header>
 
-      {/* Modals */}
+      {/* Emergency Modal */}
       <EmergencySOSModal isOpen={isSosOpen} onClose={() => setIsSosOpen(false)} />
-      <GeminiKeyModal isOpen={isGeminiKeyOpen} onClose={() => setIsGeminiKeyOpen(false)} />
-      <EmailSentHistoryModal isOpen={isEmailLogOpen} onClose={() => setIsEmailLogOpen(false)} />
     </>
   );
 };

@@ -432,7 +432,7 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
             reporterRole: 'Automated AI Monitor',
             isAutoDetected: true,
             source: 'cctv',
-            aiAnalysis: `Gemini 3.5 Flash Lite Confidence: ${Math.round(result.confidence * 100)}%. ${result.recommendation}`,
+            aiAnalysis: `Gemini 2.0 Flash Confidence: ${Math.round(result.confidence * 100)}%. ${result.recommendation}`,
             urgencyScore: 88,
           });
 

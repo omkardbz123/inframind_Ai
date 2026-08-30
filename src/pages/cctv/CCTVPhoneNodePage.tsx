@@ -376,7 +376,7 @@ export const CCTVPhoneNodePage: React.FC = () => {
               </div>
               <h2 className="text-xl font-black text-white">Register Phone as 24+ FPS CCTV Camera</h2>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Streams high-fps live motion video to the PC main portal over WebRTC for Gemini 3.5 Flash Lite inspection.
+                Streams high-fps live motion video to the PC main portal over WebRTC for Gemini 2.0 Flash inspection.
               </p>
             </div>
 

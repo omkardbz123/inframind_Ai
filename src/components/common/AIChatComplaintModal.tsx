@@ -19,11 +19,14 @@ import {
   Monitor,
   Armchair,
   Wrench,
+  MapPin,
+  HelpCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTicketStore } from '../../store/ticketStore';
 import { classifyFaultWithGemini } from '../../lib/gemini';
-import { CAMPUS_BUILDINGS, DEPARTMENTS } from '../../lib/constants';
+import { CAMPUS_BUILDINGS } from '../../lib/constants';
 import { DepartmentType } from '../../types/user';
 import { TicketPriority, Ticket } from '../../types/ticket';
 import { WingType } from '../../types/location';
@@ -35,7 +38,18 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   ticketData?: Ticket;
-  suggestedPills?: string[];
+  suggestedOptions?: Array<{ label: string; actionValue: string; icon?: string }>;
+  isConfirmationCard?: boolean;
+  draftSummary?: {
+    category: DepartmentType;
+    subcategory: string;
+    specificProblem: string;
+    building: string;
+    floor: number;
+    wing: WingType;
+    roomNumber: string;
+    priority: TicketPriority;
+  };
 }
 
 interface AIChatComplaintModalProps {
@@ -48,7 +62,7 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate();
-  const { currentUser, customGeminiApiKey, selectedRole } = useAuthStore();
+  const { currentUser, customGeminiApiKey } = useAuthStore();
   const { createTicket } = useTicketStore();
 
   const [inputMessage, setInputMessage] = useState('');
@@ -56,23 +70,51 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
   const [isThinking, setIsThinking] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
 
+  // Conversational Multi-Turn Draft State
+  const draftRef = useRef<{
+    category: DepartmentType;
+    subcategory: string;
+    specificProblem: string;
+    building: string;
+    floor: number;
+    wing: WingType;
+    roomNumber: string;
+    priority: TicketPriority;
+    urgencyScore: number;
+  }>({
+    category: 'electrical',
+    subcategory: 'Air Conditioner',
+    specificProblem: '',
+    building: 'Main Academic Building (MAB)',
+    floor: 1,
+    wing: 'east',
+    roomNumber: '102',
+    priority: 'medium',
+    urgencyScore: 70,
+  });
+
+  const conversationStepRef = useRef<'idle' | 'asking_problem_detail' | 'asking_location' | 'confirming'>('idle');
+
   const recognitionRef = useRef<any>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+  const getInitialMessages = (): ChatMessage[] => [
     {
       id: 'welcome-1',
       sender: 'ai',
-      text: `Hello ${currentUser?.displayName?.split(' ')[0] || 'there'}! 👋 I am your **CampusCare AI Assistant**.\n\nTell me what's broken or malfunctioning (by **voice speech** 🎙️ or **chat text** 💬), and I'll automatically diagnose, categorize, and dispatch a work order for you!`,
+      text: `Hello ${currentUser?.displayName?.split(' ')[0] || 'there'}! 👋 I am your **CampusCare AI Assistant** (powered by Gemini 2.0 Flash).\n\nTell me what's broken or malfunctioning (by **voice speech** 🎙️ or **chat text** 💬), and I'll help you file the complaint with the right technician!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      suggestedPills: [
-        'Ceiling fan in Room 102 is making sparks and squeaking',
-        'Water purifier on 2nd Floor East is leaking',
-        'Projector in Classroom 101 has no display signal',
-        'Washroom tap leaking on Ground Floor West',
+      suggestedOptions: [
+        { label: '❄️ AC is not working', actionValue: 'AC is not working' },
+        { label: '🌀 Ceiling fan making noise', actionValue: 'Ceiling fan is making noise' },
+        { label: '💧 Water purifier leaking', actionValue: 'Water purifier is leaking' },
+        { label: '📽️ Projector has no display', actionValue: 'Projector has no display' },
+        { label: '💡 Tube light is unlit / dark', actionValue: 'Corridor tube light is unlit' },
       ],
     },
-  ]);
+  ];
+
+  const [messages, setMessages] = useState<ChatMessage[]>(getInitialMessages);
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -139,6 +181,22 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
     }
   };
 
+  const handleResetConversation = () => {
+    conversationStepRef.current = 'idle';
+    draftRef.current = {
+      category: 'electrical',
+      subcategory: 'Air Conditioner',
+      specificProblem: '',
+      building: 'Main Academic Building (MAB)',
+      floor: 1,
+      wing: 'east',
+      roomNumber: '102',
+      priority: 'medium',
+      urgencyScore: 70,
+    };
+    setMessages(getInitialMessages());
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputMessage).trim();
     if (!query || !currentUser || isThinking) return;
@@ -160,84 +218,156 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
       setIsRecording(false);
     }
 
+    // Simulated short AI processing delay
+    await new Promise((r) => setTimeout(r, 450));
+
     try {
-      // 1. Classify with Gemini AI
-      const classification = await classifyFaultWithGemini(query, customGeminiApiKey);
-
-      // 2. Extract Location heuristics
       const lower = query.toLowerCase();
-      let building = CAMPUS_BUILDINGS[0].name;
-      let floor = 1;
-      let wing: WingType = 'east';
-      let roomNumber = '102';
+      const currentStep = conversationStepRef.current;
 
-      if (lower.includes('rnd') || lower.includes('research') || lower.includes('tower') || lower.includes('robotics')) {
-        building = CAMPUS_BUILDINGS[1].name;
+      // =========================================================================
+      // STEP 1: If in idle state, identify equipment & ask for specific breakdown details
+      // =========================================================================
+      if (currentStep === 'idle') {
+        const classification = await classifyFaultWithGemini(query, customGeminiApiKey);
+
+        draftRef.current.category = classification.category;
+        draftRef.current.subcategory = classification.subcategory;
+        draftRef.current.priority = classification.priority;
+        draftRef.current.urgencyScore = classification.urgencyScore;
+
+        conversationStepRef.current = 'asking_problem_detail';
+
+        let problemOptions: Array<{ label: string; actionValue: string }> = [];
+
+        if (lower.includes('ac') || lower.includes('air conditioner') || lower.includes('cooling')) {
+          draftRef.current.category = 'electrical';
+          draftRef.current.subcategory = 'Air Conditioner';
+          problemOptions = [
+            { label: '❄️ Not cooling / blowing warm air', actionValue: 'AC is blowing warm air and not cooling' },
+            { label: '💧 Water leaking from indoor unit', actionValue: 'Water is dripping from the indoor AC unit' },
+            { label: '🔌 Dead power / remote not responding', actionValue: 'AC won\'t turn on and remote is dead' },
+            { label: '🔊 Loud vibration or rattling noise', actionValue: 'AC is making violent vibrating rattling noise' },
+          ];
+        } else if (lower.includes('fan')) {
+          draftRef.current.category = 'electrical';
+          draftRef.current.subcategory = 'Ceiling Fan';
+          problemOptions = [
+            { label: '🌀 Fan not spinning / dead', actionValue: 'Ceiling fan is not spinning at all' },
+            { label: '⚡ Sparks / burning smell', actionValue: 'Fan motor sparking near clamp with burning smell' },
+            { label: '🔊 Loud squeaking / bearing noise', actionValue: 'Fan bearing is screeching loudly' },
+            { label: '⚠️ Fan wobbling / loose hook', actionValue: 'Fan is wobbling dangerously from ceiling clamp' },
+          ];
+        } else if (lower.includes('water') || lower.includes('purifier') || lower.includes('filter')) {
+          draftRef.current.category = 'plumbing';
+          draftRef.current.subcategory = 'RO Water Purifier';
+          problemOptions = [
+            { label: '💧 RO unit leaking / overflow', actionValue: 'Water purifier bottom filter leaking rapidly' },
+            { label: '🚫 No water dispensing', actionValue: 'Water purifier tap not dispensing water' },
+            { label: '👅 Foul taste / filter change needed', actionValue: 'Water has strange taste and filter needs replacement' },
+          ];
+        } else if (lower.includes('projector') || lower.includes('screen') || lower.includes('display')) {
+          draftRef.current.category = 'technical';
+          draftRef.current.subcategory = 'Projector Display / Bulb';
+          problemOptions = [
+            { label: '📽️ No HDMI / display signal', actionValue: 'Projector turns on but says No Signal with HDMI' },
+            { label: '💡 Lamp overheating / shutting down', actionValue: 'Projector displays Lamp Temp Error and turns off' },
+            { label: '⚡ Projector won\'t power ON', actionValue: 'Power LED is dead and won\'t turn on' },
+          ];
+        } else {
+          problemOptions = [
+            { label: '⚠️ Equipment not working / broken', actionValue: `${classification.subcategory} is broken and not working` },
+            { label: '🔌 Power or electrical fault', actionValue: `${classification.subcategory} has power failure` },
+            { label: '🔊 Strange noise / vibration', actionValue: `${classification.subcategory} is making abnormal noise` },
+          ];
+        }
+
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          text: `Got it! I detected this as a **${draftRef.current.subcategory} (${draftRef.current.category.toUpperCase()})** issue.\n\n👉 **What exact problem are you facing with the ${draftRef.current.subcategory}?** Please select an option below or describe it:`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          suggestedOptions: problemOptions,
+        };
+
+        setMessages((prev) => [...prev, aiMsg]);
       }
+      // =========================================================================
+      // STEP 2: Capture problem detail -> Ask for Location
+      // =========================================================================
+      else if (currentStep === 'asking_problem_detail') {
+        draftRef.current.specificProblem = query;
+        conversationStepRef.current = 'asking_location';
 
-      if (lower.includes('ground') || lower.includes('floor 0') || lower.includes('00') || lower.includes('auditorium')) {
-        floor = 0;
-      } else if (lower.includes('2nd') || lower.includes('second') || lower.includes('floor 2') || lower.includes('20')) {
-        floor = 2;
-      } else if (lower.includes('1st') || lower.includes('first') || lower.includes('floor 1') || lower.includes('10')) {
-        floor = 1;
+        const locationOptions = [
+          { label: '🏛️ MAB - Room 102 (Floor 1)', actionValue: 'Main Academic Building (MAB), Floor 1, Room 102' },
+          { label: '🏛️ MAB - Room 201 (Floor 2)', actionValue: 'Main Academic Building (MAB), Floor 2, Room 201' },
+          { label: '🔬 Science Block - Computer Lab 1', actionValue: 'Science Block, Floor 2, Computer Lab 1' },
+          { label: '📚 Central Library - Reading Hall', actionValue: 'Central Library, Ground Floor, Reading Hall' },
+          { label: '🎙️ Auditorium / Seminar Hall', actionValue: 'Main Academic Building (MAB), Ground Floor, Auditorium' },
+        ];
+
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          text: `Thanks for the details! 📍 **Where is this ${draftRef.current.subcategory} located on campus?**\n\nPick a location below or type your room number:`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          suggestedOptions: locationOptions,
+        };
+
+        setMessages((prev) => [...prev, aiMsg]);
       }
+      // =========================================================================
+      // STEP 3: Capture Location -> Show Confirmation Summary Card
+      // =========================================================================
+      else if (currentStep === 'asking_location') {
+        // Parse building, floor, room
+        if (lower.includes('science') || lower.includes('lab') || lower.includes('tower')) {
+          draftRef.current.building = CAMPUS_BUILDINGS[1]?.name || 'Science & Research Block';
+        } else if (lower.includes('library')) {
+          draftRef.current.building = 'Central Library & Reading Hall';
+        } else {
+          draftRef.current.building = 'Main Academic Building (MAB)';
+        }
 
-      if (lower.includes('west')) {
-        wing = 'west';
-      } else if (lower.includes('central') || lower.includes('lobby') || lower.includes('atrium')) {
-        wing = 'central';
-      } else {
-        wing = 'east';
+        if (lower.includes('ground') || lower.includes('floor 0')) {
+          draftRef.current.floor = 0;
+        } else if (lower.includes('2nd') || lower.includes('second') || lower.includes('floor 2') || lower.includes('20')) {
+          draftRef.current.floor = 2;
+        } else {
+          draftRef.current.floor = 1;
+        }
+
+        const roomMatch = query.match(/(?:room|class|hall|lab|cabin)\s*([a-zA-Z0-9-]+)/i);
+        if (roomMatch && roomMatch[1]) {
+          draftRef.current.roomNumber = roomMatch[1].toUpperCase();
+        } else if (lower.includes('102')) {
+          draftRef.current.roomNumber = '102';
+        } else if (lower.includes('201')) {
+          draftRef.current.roomNumber = '201';
+        } else {
+          draftRef.current.roomNumber = 'Room 102';
+        }
+
+        conversationStepRef.current = 'confirming';
+
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          text: `Here is the complaint summary ready to be dispatched to our campus maintenance technician:`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isConfirmationCard: true,
+          draftSummary: { ...draftRef.current },
+        };
+
+        setMessages((prev) => [...prev, aiMsg]);
       }
-
-      // Room number regex extraction (e.g. room 101, class 002, 203)
-      const roomMatch = query.match(/(?:room|class|hall|lab|cabin)\s*([a-zA-Z0-9-]+)/i);
-      if (roomMatch && roomMatch[1]) {
-        roomNumber = roomMatch[1].toUpperCase();
+      // =========================================================================
+      // STEP 4: Confirming dispatch
+      // =========================================================================
+      else if (currentStep === 'confirming') {
+        await executeTicketCreation();
       }
-
-      // 3. Automatically Create Work Order Ticket
-      const newTicket = await createTicket({
-        title: classification.refinedTitle || `${classification.subcategory} Issue in Room ${roomNumber}`,
-        description: `${query}\n\n[AI Diagnostic]: ${classification.summaryReason}`,
-        category: classification.category,
-        subcategory: classification.subcategory,
-        priority: classification.priority,
-        building,
-        floor,
-        wing,
-        roomNumber,
-        locationDescription: `${building}, Floor ${floor}, ${wing.toUpperCase()} Wing (Room ${roomNumber})`,
-        reporterId: currentUser.uid,
-        reporterName: currentUser.displayName,
-        reporterEmail: currentUser.email,
-        reporterRole: currentUser.role,
-        source: 'voice',
-        urgencyScore: classification.urgencyScore,
-      });
-
-      // 4. Synthesize friendly AI conversational reply
-      const aiReplyText = `✅ **Work Order #${newTicket.id} Successfully Dispatched!**\n\nI have diagnosed your report as **${classification.category.toUpperCase()} (${classification.subcategory})** with **${classification.priority.toUpperCase()} Priority**.\n\n📍 **Location**: ${building}, Floor ${floor}, ${wing.toUpperCase()} Wing (Room ${roomNumber})\n⏱️ **SLA Resolution Target**: ${new Date(newTicket.slaDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\nOur campus technician team has been notified. You can track live updates in your dashboard!`;
-
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: aiReplyText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        ticketData: newTicket,
-      };
-
-      setMessages((prev) => [...prev, aiMsg]);
-
-      try {
-        confetti({
-          particleCount: 50,
-          spread: 60,
-          origin: { y: 0.7 },
-          colors: ['#821930', '#10b981', '#3b82f6'],
-        });
-      } catch {}
     } catch (err) {
       console.error(err);
       const errorMsg: ChatMessage = {
@@ -252,11 +382,68 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
     }
   };
 
+  const executeTicketCreation = async () => {
+    if (!currentUser) return;
+    setIsThinking(true);
+
+    try {
+      const draft = draftRef.current;
+      const title = `${draft.subcategory} Fault: ${draft.specificProblem || 'Maintenance Required'}`;
+      const description = `${draft.specificProblem || draft.subcategory + ' issue'}\n\n[Location]: ${draft.building}, Floor ${draft.floor}, Room ${draft.roomNumber}\n[Reported via]: Gemini 2.0 Flash AI Voice & Chat Assistant.`;
+
+      const newTicket = await createTicket({
+        title,
+        description,
+        category: draft.category,
+        subcategory: draft.subcategory,
+        priority: draft.priority,
+        building: draft.building,
+        floor: draft.floor,
+        wing: draft.wing,
+        roomNumber: draft.roomNumber,
+        locationDescription: `${draft.building}, Floor ${draft.floor}, ${draft.wing.toUpperCase()} Wing (${draft.roomNumber})`,
+        reporterId: currentUser.uid,
+        reporterName: currentUser.displayName,
+        reporterEmail: currentUser.email,
+        reporterRole: currentUser.role,
+        source: 'voice',
+        urgencyScore: draft.urgencyScore,
+      });
+
+      conversationStepRef.current = 'idle';
+
+      const aiReplyText = `✅ **Work Order #${newTicket.id} Successfully Dispatched!**\n\nOur campus technician **${newTicket.assignedToName}** has been notified via phone & email.\n\n📍 **Location**: ${draft.building} (Room ${draft.roomNumber})\n⏱️ **Target SLA**: ${new Date(newTicket.slaDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\nYou will receive a notification and email update as soon as the problem is resolved!`;
+
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        text: aiReplyText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        ticketData: newTicket,
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
+
+      try {
+        confetti({
+          particleCount: 60,
+          spread: 70,
+          origin: { y: 0.65 },
+          colors: ['#821930', '#10b981', '#3b82f6', '#f59e0b'],
+        });
+      } catch {}
+    } catch (e: any) {
+      alert(`Failed to create ticket: ${e.message}`);
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col h-[640px] max-h-[92vh] overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col h-[650px] max-h-[92vh] overflow-hidden">
         {/* Chatbot Header */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-maroon-800 via-maroon-900 to-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -270,21 +457,30 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
                 </h3>
                 <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold rounded-full border border-emerald-400/30 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Gemini AI
+                  Gemini 2.0 Flash
                 </span>
               </div>
               <p className="text-[11px] text-maroon-200">
-                Speak or type your breakdown • Instant complaint dispatch for Students & Teachers
+                Interactive Voice & Chat • Automated technician dispatch for Students & Teachers
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleResetConversation}
+              className="p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition"
+              title="Reset Conversation"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Chat Messages Stream */}
@@ -309,7 +505,7 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
                 </div>
 
                 {/* Bubble */}
-                <div className={`space-y-2 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
+                <div className={`space-y-2.5 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
                   <div
                     className={`p-3.5 sm:p-4 rounded-2xl text-xs sm:text-[13px] leading-relaxed shadow-xs ${
                       isUser
@@ -320,14 +516,61 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
                     <div className="whitespace-pre-line">{msg.text}</div>
                   </div>
 
+                  {/* Render Confirmation Card before Dispatching */}
+                  {msg.isConfirmationCard && msg.draftSummary && (
+                    <div className="p-4 bg-white border-2 border-maroon-300 rounded-2xl shadow-md text-xs space-y-3 animate-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-1.5 font-bold text-maroon-900">
+                          <Wrench className="w-4 h-4 text-maroon-700" />
+                          <span>Dispatch Confirmation</span>
+                        </div>
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full font-bold text-[10px] uppercase">
+                          {msg.draftSummary.priority} Priority
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 text-slate-700">
+                        <div>
+                          <strong>Equipment:</strong> {msg.draftSummary.subcategory} (
+                          <span className="capitalize">{msg.draftSummary.category}</span>)
+                        </div>
+                        <div>
+                          <strong>Specific Issue:</strong> {msg.draftSummary.specificProblem || 'Not specified'}
+                        </div>
+                        <div>
+                          <strong>Location:</strong> {msg.draftSummary.building} • Room {msg.draftSummary.roomNumber}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono">
+                          Auto-Routing: Will notify on-duty Department Technician immediately.
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={executeTicketCreation}
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Confirm & Send Technician Now</span>
+                        </button>
+                        <button
+                          onClick={handleResetConversation}
+                          className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                        >
+                          <span>Change Details</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Render Work Order Slip if Ticket is Created */}
                   {msg.ticketData && (
-                    <div className="p-4 bg-white border-2 border-emerald-200 rounded-2xl shadow-sm text-xs space-y-2.5 animate-in zoom-in-95 duration-150">
+                    <div className="p-4 bg-white border-2 border-emerald-300 rounded-2xl shadow-md text-xs space-y-2.5 animate-in zoom-in-95 duration-150">
                       <div className="flex items-center justify-between pb-2 border-b border-emerald-100">
                         <div className="flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           <span className="font-mono font-bold text-emerald-900">
-                            Ticket #{msg.ticketData.id}
+                            Ticket #{msg.ticketData.id} (Dispatched)
                           </span>
                         </div>
                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px] uppercase">
@@ -336,6 +579,9 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
                       </div>
 
                       <div className="space-y-1 text-slate-700">
+                        <div>
+                          <strong>Assigned Technician:</strong> {msg.ticketData.assignedToName}
+                        </div>
                         <div>
                           <strong>Equipment:</strong> {msg.ticketData.subcategory} (
                           <span className="capitalize">{msg.ticketData.category}</span>)
@@ -374,17 +620,17 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
                     </div>
                   )}
 
-                  {/* Suggestion Chips */}
-                  {msg.suggestedPills && (
+                  {/* Interactive Selectable Option Chips */}
+                  {msg.suggestedOptions && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      {msg.suggestedPills.map((pill, idx) => (
+                      {msg.suggestedOptions.map((opt, idx) => (
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => handleSendMessage(pill)}
-                          className="text-left px-3 py-1.5 bg-white hover:bg-maroon-50 border border-slate-200 hover:border-maroon-300 rounded-xl text-[11px] font-medium text-slate-700 hover:text-maroon-900 transition shadow-2xs"
+                          onClick={() => handleSendMessage(opt.actionValue)}
+                          className="text-left px-3.5 py-2 bg-white hover:bg-maroon-50 border border-slate-200 hover:border-maroon-400 rounded-xl text-xs font-semibold text-slate-800 hover:text-maroon-900 transition shadow-2xs active:scale-95 flex items-center gap-1.5"
                         >
-                          "{pill}"
+                          <span>{opt.label}</span>
                         </button>
                       ))}
                     </div>
@@ -408,7 +654,7 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
                   <span className="w-2 h-2 rounded-full bg-maroon-700 animate-bounce [animation-delay:0.2s]" />
                   <span className="w-2 h-2 rounded-full bg-maroon-700 animate-bounce [animation-delay:0.4s]" />
                 </div>
-                <span>Gemini AI is analyzing your report & dispatching work order...</span>
+                <span>Gemini 2.0 Flash is analyzing details & preparing work order...</span>
               </div>
             </div>
           )}
@@ -421,7 +667,7 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
           <div className="px-4 py-2.5 bg-rose-600 text-white flex items-center justify-between text-xs animate-pulse">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-              <span className="font-bold">Listening to your voice... Speak your complaint now</span>
+              <span className="font-bold">Listening to your voice... Speak your problem or room number</span>
             </div>
             <button
               onClick={toggleVoiceRecording}
@@ -461,7 +707,7 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
               placeholder={
                 isRecording
                   ? 'Listening to speech...'
-                  : 'Type or speak: e.g. "Ceiling fan #2 vibrating in Room 102"...'
+                  : 'Type or speak: e.g. "AC not cooling in Room 102"...'
               }
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
@@ -479,8 +725,8 @@ export const AIChatComplaintModal: React.FC<AIChatComplaintModalProps> = ({
           </form>
 
           <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 px-1">
-            <span>Powered by Google Gemini AI & MIT ACSC Facility Engine</span>
-            <span>Click Mic 🎙️ to talk or type to submit</span>
+            <span>Powered by Google Gemini 2.0 Flash AI</span>
+            <span>Click Mic 🎙️ to talk or select an option above</span>
           </div>
         </div>
       </div>
