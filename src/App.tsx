@@ -4,6 +4,7 @@ import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
 import { QuickLoginPage } from './pages/auth/QuickLoginPage';
+import { DetailsPage } from './pages/shared/DetailsPage';
 import { DashboardOverview } from './pages/shared/DashboardOverview';
 import { ReportFault } from './pages/student/ReportFault';
 import { MyTickets } from './pages/student/MyTickets';
@@ -39,7 +40,10 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/quick_login" element={<QuickLoginPage />} />
         <Route path="/quick-login" element={<QuickLoginPage />} />
-        <Route path="/quicklogin" element={<QuickLoginPage />} />
+        {/* Public Documentation & Architecture Routes */}
+        <Route path="/details" element={<DetailsPage />} />
+        <Route path="/architecture" element={<DetailsPage />} />
+        <Route path="/docs" element={<DetailsPage />} />
 
         {/* Dedicated Smartphone CCTV Node Standalone Public Routes */}
         <Route path="/cctv-node" element={<CCTVPhoneNodePage />} />

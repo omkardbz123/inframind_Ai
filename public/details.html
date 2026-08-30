@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIT ACSC CampusCare (InfraMind AI) — Complete Project Architecture & Technical Documentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --maroon-primary: #800020;
+      --maroon-dark: #5c0017;
+      --maroon-light: #9e1b32;
+      --gold-accent: #d97706;
+      --gold-light: #fbbf24;
+      --emerald-accent: #059669;
+      --bg-dark: #0f172a;
+      --bg-surface: #ffffff;
+      --bg-alt: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-alt);
+      color: var(--text-main);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Navigation Header */
+    header {
+      background: linear-gradient(135deg, var(--maroon-primary) 0%, var(--maroon-dark) 100%);
+      color: #ffffff;
+      padding: 48px 24px;
+      border-bottom: 4px solid var(--gold-accent);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(217,119,6,0.15) 0%, rgba(255,255,255,0) 70%);
+      pointer-events: none;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .header-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .badge-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-gold {
+      background: rgba(217, 119, 6, 0.2);
+      color: var(--gold-light);
+      border: 1px solid rgba(217, 119, 6, 0.4);
+    }
+
+    .badge-white {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .badge-emerald {
+      background: rgba(5, 150, 105, 0.2);
+      color: #a7f3d0;
+      border: 1px solid rgba(5, 150, 105, 0.4);
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+    }
+
+    .header-sub {
+      font-size: 15px;
+      color: #fecdd3;
+      max-width: 800px;
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background-color: var(--gold-accent);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+    }
+
+    .btn-primary:hover {
+      background-color: #b45309;
+      transform: translateY(-1px);
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Main Grid Layout */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 32px;
+      margin: 40px auto;
+    }
+
+    @media (max-width: 900px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Sticky Sidebar Navigation */
+    .sidebar {
+      position: sticky;
+      top: 24px;
+      height: fit-content;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+
+    .sidebar h4 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .sidebar ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sidebar a {
+      display: block;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .sidebar a:hover {
+      background-color: #fdf2f4;
+      color: var(--maroon-primary);
+    }
+
+    /* Content Cards */
+    .content-area {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: #fdf2f4;
+      color: var(--maroon-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    /* Grid Layouts for Features & Tech */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-top: 16px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-top: 16px;
+    }
+
+    .feature-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 20px;
+      transition: all 0.2s ease;
+    }
+
+    .feature-box:hover {
+      border-color: var(--maroon-primary);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(128, 0, 32, 0.05);
+    }
+
+    .feature-box h4 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-box p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Diagram Canvas / Architecture */
+    .diagram-container {
+      background: #0f172a;
+      border-radius: 16px;
+      padding: 28px;
+      color: #f8fafc;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+
+    .diagram-step {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .diagram-step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--gold-accent);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 13px;
+      shrink-0: 0;
+    }
+
+    .diagram-step-body {
+      background: #1e293b;
+      border: 1px solid #334155;
+      padding: 12px 18px;
+      border-radius: 12px;
+      flex-grow: 1;
+      font-size: 13px;
+    }
+
+    .diagram-step-body strong {
+      color: var(--gold-light);
+    }
+
+    /* Tech Stack Tags */
+    .tech-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      padding: 6px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Role Matrix Table */
+    .table-container {
+      overflow-x: auto;
+      margin-top: 16px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f5f9;
+      color: #334155;
+      font-weight: 700;
+      padding: 12px 16px;
+      border-bottom: 2px solid #cbd5e1;
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #475569;
+    }
+
+    tr:hover td {
+      background-color: #f8fafc;
+    }
+
+    .role-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 11px;
+    }
+
+    .role-student { background: #dcfce7; color: #166534; }
+    .role-teacher { background: #dbeafe; color: #1e40af; }
+    .role-employee { background: #fef3c7; color: #92400e; }
+    .role-manager { background: #f3e8ff; color: #6b21a8; }
+    .role-admin { background: #fee2e2; color: #991b1b; }
+
+    footer {
+      background: #0f172a;
+      color: #94a3b8;
+      padding: 32px 20px;
+      text-align: center;
+      font-size: 13px;
+      margin-top: 60px;
+      border-top: 1px solid #1e293b;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div class="container header-content">
+      <div class="badge-bar">
+        <span class="badge badge-gold">Smart India Hackathon 2026</span>
+        <span class="badge badge-white">MAEER's MIT ACSC, Alandi (D.), Pune</span>
+        <span class="badge badge-emerald">Production Edge Deployed</span>
+      </div>
+      <h1>MIT ACSC CampusCare (InfraMind AI)</h1>
+      <p class="header-sub">
+        AI-Powered Smart Campus Infrastructure Maintenance, Automated CCTV Computer Vision Inspection, Real-Time Cross-Device WebRTC Streaming, and End-to-End Work Order Lifecycle Intelligence.
+      </p>
+      <div class="header-actions">
+        <a href="/" class="btn btn-primary">🚀 Launch Live Campus Portal</a>
+        <a href="/quick_login" class="btn btn-outline">⚡ Fast 1-Click Evaluation Login</a>
+        <a href="https://github.com/omkardbz123/inframind_Ai" target="_blank" class="btn btn-outline">💻 GitHub Repository</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Documentation Layout -->
+  <div class="container main-layout">
+
+    <!-- Sticky Navigation Sidebar -->
+    <aside class="sidebar">
+      <h4>Documentation Index</h4>
+      <ul>
+        <li><a href="#overview">1. Executive Overview</a></li>
+        <li><a href="#architecture">2. System Architecture</a></li>
+        <li><a href="#core-flows">3. End-to-End Workflows</a></li>
+        <li><a href="#ai-cctv">4. Gemini AI & CCTV Vision</a></li>
+        <li><a href="#tech-stack">5. Tech Stack & Libraries</a></li>
+        <li><a href="#rbac">6. RBAC & User Personas</a></li>
+        <li><a href="#hardware-pdf">7. QR, WebRTC & PDF Engine</a></li>
+        <li><a href="#demo-access">8. Evaluation Test Access</a></li>
+      </ul>
+    </aside>
+
+    <!-- Content Sections -->
+    <main class="content-area">
+
+      <!-- 1. Executive Overview -->
+      <section id="overview" class="card">
+        <div class="card-header">
+          <div class="card-icon">🏛️</div>
+          <div>
+            <h2 class="card-title">1. Executive Overview & Problem Statement</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">Transforming educational campus facilities with real-time AI intelligence</p>
+          </div>
+        </div>
+        <p style="font-size: 14px; margin-bottom: 16px;">
+          Traditional educational campuses suffer from delayed maintenance reporting, lack of automated fault detection, manual dispatch bottlenecks, and missing photographic resolution proof. <strong>MIT ACSC CampusCare</strong> delivers a unified ecosystem integrating Computer Vision, Real-Time WebRTC Video Nodes, Multimodal Gemini AI, and Physical QR Code Scanning.
+        </p>
+
+        <div class="grid-3">
+          <div class="feature-box">
+            <h4>⚡ Rapid Reporting</h4>
+            <p>Physical QR scanning auto-populates campus building, room, and asset data directly into Step-3 fault logging in under 5 seconds.</p>
+          </div>
+          <div class="feature-box">
+            <h4>👁️ CCTV Vision AI</h4>
+            <p>Automated frame-by-frame analysis detects dark corridor LEDs and night fixture outages, instantly generating automated work orders.</p>
+          </div>
+          <div class="feature-box">
+            <h4>📄 Verified Resolution</h4>
+            <p>Technicians capture on-site photographic evidence. System auto-generates official signed PDF work orders and sends live Gmail notifications.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. System Architecture -->
+      <section id="architecture" class="card">
+        <div class="card-header">
+          <div class="card-icon">⚙️</div>
+          <div>
+            <h2 class="card-title">2. System Architecture & Component Design</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">Edge-rendered frontend, real-time client state sync, and Node.js transactional backend</p>
+          </div>
+        </div>
+
+        <div class="diagram-container">
+          <div class="diagram-step">
+            <div class="diagram-step-num">1</div>
+            <div class="diagram-step-body">
+              <strong>User Presentation Layer (PWA + React 18 + Tailwind):</strong> Mobile-first UI with responsive dashboards tailored for Students, Teachers, Technicians, Facilities Managers, and the Principal.
+            </div>
+          </div>
+          <div class="diagram-step">
+            <div class="diagram-step-num">2</div>
+            <div class="diagram-step-body">
+              <strong>Hardware & Vision Interfacing:</strong> HTML5 WebRTC Camera (<code style="color:#67e8f9;">getUserMedia</code>) + <code style="color:#67e8f9;">jsQR</code> Barcode Decoder + Google Gemini Multimodal Vision API.
+            </div>
+          </div>
+          <div class="diagram-step">
+            <div class="diagram-step-num">3</div>
+            <div class="diagram-step-body">
+              <strong>Distributed Reactive State Layer:</strong> Zustand State Stores with <code style="color:#67e8f9;">BroadcastChannel API</code> for instantaneous cross-tab and cross-window sync across all devices.
+            </div>
+          </div>
+          <div class="diagram-step">
+            <div class="diagram-step-num">4</div>
+            <div class="diagram-step-body">
+              <strong>Backend & Notification Layer:</strong> Node.js Express Server + Nodemailer + Google SMTP for live email dispatch with attached high-resolution PDF work orders.
+            </div>
+          </div>
+          <div class="diagram-step">
+            <div class="diagram-step-num">5</div>
+            <div class="diagram-step-body">
+              <strong>Edge CDN Delivery:</strong> Deployed on Cloudflare Workers globally with Workbox Service Worker precaching for sub-second load times.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. End-to-End Workflows -->
+      <section id="core-flows" class="card">
+        <div class="card-header">
+          <div class="card-icon">🔄</div>
+          <div>
+            <h2 class="card-title">3. End-to-End Operational Lifecycle</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">How maintenance issues travel from initial detection to verified completion</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="feature-box">
+            <h4>Step 1: Fault Logging & Evidence</h4>
+            <p>Student or faculty scans asset QR tag (or snaps photo / chats with Gemini AI). Asset metadata (Building, Floor, Room, Tag) is auto-populated. User attaches fault photo and submits.</p>
+          </div>
+          <div class="feature-box">
+            <h4>Step 2: Department Triage & SLA</h4>
+            <p>Facilities Manager views incoming complaint on Department Triage queue. Gemini AI computes Urgency Score (0-100) and calculates target SLA deadline (2h for Critical, 8h for High).</p>
+          </div>
+          <div class="feature-box">
+            <h4>Step 3: Technician Dispatch & Repair</h4>
+            <p>Technician receives on-screen notification and task card under Work Orders. Technician clicks <em>Start Work</em> to transition to in-progress and begins on-site hardware troubleshooting.</p>
+          </div>
+          <div class="feature-box">
+            <h4>Step 4: Resolution Proof & PDF Report</h4>
+            <p>Technician logs diagnostic notes, spare parts used, and snaps a live resolution proof photo. System generates official signed PDF work order with both photos and dispatches Gmail confirmation.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Gemini AI & CCTV Vision -->
+      <section id="ai-cctv" class="card">
+        <div class="card-header">
+          <div class="card-icon">🤖</div>
+          <div>
+            <h2 class="card-title">4. Gemini Multimodal AI & CCTV Vision Inspector</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">Proactive failure prevention using machine vision and degradation curves</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="feature-box">
+            <h4>🎥 Cross-Device CCTV Camera Node</h4>
+            <p>Turn any smartphone into a remote CCTV node (<code style="color:var(--maroon-primary)">/cctv-node</code>). Transmits live WebRTC camera feed to the Central Control Room for automated continuous monitoring.</p>
+          </div>
+          <div class="feature-box">
+            <h4>💡 Automated Night LED Outage Detection</h4>
+            <p>Analyzes video frames with Google Gemini Vision API to detect dark corridor tube lights, unlit fixtures, and electrical flicker, creating automated priority tickets without manual human intervention.</p>
+          </div>
+          <div class="feature-box">
+            <h4>📈 Predictive Risk Engine</h4>
+            <p>Calculates Mean Time Between Failures (MTBF), operational aging degradation curves, and thermal wear factors to alert technicians <em>before</em> equipment suffers total breakdown.</p>
+          </div>
+          <div class="feature-box">
+            <h4>🗺️ Campus Spatial Risk Heatmap</h4>
+            <p>Visual map of Main Academic Block (MAB), C-Block, and Library showing high-risk infrastructure zones and open work orders by floor and wing.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. Tech Stack -->
+      <section id="tech-stack" class="card">
+        <div class="card-header">
+          <div class="card-icon">💻</div>
+          <div>
+            <h2 class="card-title">5. Core Technologies & Architecture Stack</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">Modern, performant, type-safe development stack</p>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
+          <span class="tech-pill">React 18</span>
+          <span class="tech-pill">TypeScript</span>
+          <span class="tech-pill">Vite 6</span>
+          <span class="tech-pill">Tailwind CSS</span>
+          <span class="tech-pill">Zustand</span>
+          <span class="tech-pill">Google Gemini AI</span>
+          <span class="tech-pill">WebRTC Video</span>
+          <span class="tech-pill">jsQR Barcode</span>
+          <span class="tech-pill">jsPDF Engine</span>
+          <span class="tech-pill">Node.js Express</span>
+          <span class="tech-pill">Nodemailer SMTP</span>
+          <span class="tech-pill">Cloudflare Workers</span>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Technology</th>
+                <th>Role in CampusCare</th>
+                <th>Why Selected</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>React 18 + Vite</strong></td>
+                <td>Core Frontend SPA & Component Hierarchy</td>
+                <td>Lightning-fast HMR, component reusability, and instant bundle optimization.</td>
+              </tr>
+              <tr>
+                <td><strong>Zustand + BroadcastChannel</strong></td>
+                <td>Reactive Global State Management</td>
+                <td>Zero-boilerplate global state with real-time multi-tab and multi-window synchronization.</td>
+              </tr>
+              <tr>
+                <td><strong>Google Gemini AI</strong></td>
+                <td>Multimodal Vision & NLP Complaint Assistant</td>
+                <td>Direct video frame visual inspection, problem classification, and natural language fault triage.</td>
+              </tr>
+              <tr>
+                <td><strong>jsQR + WebRTC</strong></td>
+                <td>Live Physical Barcode Scanner</td>
+                <td>Client-side 60fps QR code decoding from mobile camera streams without server roundtrips.</td>
+              </tr>
+              <tr>
+                <td><strong>jsPDF + Canvas</strong></td>
+                <td>Work Order PDF Generator</td>
+                <td>Dynamic creation of official college maintenance slips embedding dual photographic proof.</td>
+              </tr>
+              <tr>
+                <td><strong>Cloudflare Edge</strong></td>
+                <td>Global Edge Hosting & Routing</td>
+                <td>Low-latency edge caching with automatic SPA HTML5 fallback via Wrangler.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 6. Role-Based Access Matrix -->
+      <section id="rbac" class="card">
+        <div class="card-header">
+          <div class="card-icon">👥</div>
+          <div>
+            <h2 class="card-title">6. Role-Based Access Control (RBAC) Matrix</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">Strict institutional access with 5 dedicated user personas</p>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>User Persona</th>
+                <th>Role Badge</th>
+                <th>Permitted Actions & Workspaces</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Student (Omkar Bhujbal)</strong></td>
+                <td><span class="role-badge role-student">STUDENT</span></td>
+                <td>QR Code Scanning, AI Voice Complaint Filing, My Complaints Tracking, Personal Work Order PDF Downloads.</td>
+              </tr>
+              <tr>
+                <td><strong>Teacher (Dr. Rajiv Deshpande)</strong></td>
+                <td><span class="role-badge role-teacher">TEACHER</span></td>
+                <td>Classroom / Lab Equipment Fault Reporting, Priority Flagging, Department Notification Tracking.</td>
+              </tr>
+              <tr>
+                <td><strong>Technician (Rajesh Kamble)</strong></td>
+                <td><span class="role-badge role-employee">EMPLOYEE</span></td>
+                <td>Assigned Work Orders, Diagnostic Notes Entry, Spare Parts Tracking, Resolution Proof Photo Upload, Job Completion.</td>
+              </tr>
+              <tr>
+                <td><strong>Facilities Manager (Er. Ramesh Kulkarni)</strong></td>
+                <td><span class="role-badge role-manager">MANAGER</span></td>
+                <td>Department Triage Queue, SLA Assignment, Technician Reallocation, Asset Inventory & QR Management.</td>
+              </tr>
+              <tr>
+                <td><strong>Principal / Admin (Dr. B. B. Waphare)</strong></td>
+                <td><span class="role-badge role-admin">ADMIN</span></td>
+                <td>CCTV Vision AI Control Room, Predictive Risk Engine, Campus Risk Map, Staff Directory, College-wide Analytics.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 7. Hardware, WebRTC & PDF Engine -->
+      <section id="hardware-pdf" class="card">
+        <div class="card-header">
+          <div class="card-icon">📄</div>
+          <div>
+            <h2 class="card-title">7. Physical Hardware & Report Generation Pipeline</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">High-fidelity documentation with dual photographic proof</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="feature-box">
+            <h4>📷 Dual Photo Evidence in PDF</h4>
+            <p>Every generated PDF work order includes two standardized high-DPI image boxes: <strong>Box 1 (Fault Photo logged by Student/Teacher)</strong> and <strong>Box 2 (Resolution Proof Photo uploaded by Technician)</strong>.</p>
+          </div>
+          <div class="feature-box">
+            <h4>📧 Live Gmail SMTP Dispatch</h4>
+            <p>When tickets are logged or resolved, Node.js + Nodemailer automatically transmits branded HTML notification emails with the physical PDF work order attached directly to the student and manager.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. Evaluation Test Access -->
+      <section id="demo-access" class="card">
+        <div class="card-header">
+          <div class="card-icon">🔑</div>
+          <div>
+            <h2 class="card-title">8. Evaluation Test Credentials & Live Links</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">Fast 1-click evaluation access for evaluators and judges</p>
+          </div>
+        </div>
+
+        <p style="font-size: 13px; margin-bottom: 16px;">
+          For evaluation without needing Google OAuth login, use the dedicated Quick Login page:
+        </p>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+          <a href="/quick_login" class="btn btn-primary">⚡ Open Quick Login Portal</a>
+          <a href="/login" class="btn btn-outline" style="color: var(--text-main); border-color: #cbd5e1;">Institutional Google Login</a>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Persona</th>
+                <th>Institutional Email</th>
+                <th>Default Password</th>
+                <th>Quick 1-Click Access</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Student (Omkar Bhujbal)</strong></td>
+                <td><code>5454317@mitacsc.edu.in</code></td>
+                <td><code>mitacsc@123</code></td>
+                <td><a href="/quick_login" style="color: var(--maroon-primary); font-weight: bold;">Quick Login →</a></td>
+              </tr>
+              <tr>
+                <td><strong>Teacher (Dr. Deshpande)</strong></td>
+                <td><code>dr.deshpande@mitacsc.edu.in</code></td>
+                <td><code>mitacsc@123</code></td>
+                <td><a href="/quick_login" style="color: var(--maroon-primary); font-weight: bold;">Quick Login →</a></td>
+              </tr>
+              <tr>
+                <td><strong>Electrician (Rajesh Kamble)</strong></td>
+                <td><code>rajesh.electrician@mitacsc.edu.in</code></td>
+                <td><code>mitacsc@123</code></td>
+                <td><a href="/quick_login" style="color: var(--maroon-primary); font-weight: bold;">Quick Login →</a></td>
+              </tr>
+              <tr>
+                <td><strong>Manager (Er. Ramesh Kulkarni)</strong></td>
+                <td><code>ramesh.manager@mitacsc.edu.in</code></td>
+                <td><code>mitacsc@123</code></td>
+                <td><a href="/quick_login" style="color: var(--maroon-primary); font-weight: bold;">Quick Login →</a></td>
+              </tr>
+              <tr>
+                <td><strong>Principal (Dr. B. B. Waphare)</strong></td>
+                <td><code>principal.admin@mitacsc.edu.in</code></td>
+                <td><code>mitacsc@123</code></td>
+                <td><a href="/quick_login" style="color: var(--maroon-primary); font-weight: bold;">Quick Login →</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p style="font-weight: 700; color: #ffffff; margin-bottom: 4px;">
+        MAEER's MIT Arts, Commerce & Science College, Alandi (D.), Pune - 412105
+      </p>
+      <p>Smart India Hackathon • InfraMind AI CampusCare Infrastructure Platform</p>
+    </div>
+  </footer>
+
+</body>
+</html>
