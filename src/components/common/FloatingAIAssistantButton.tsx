@@ -4,13 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import { AIChatComplaintModal } from './AIChatComplaintModal';
 
 export const FloatingAIAssistantButton: React.FC = () => {
-  const { selectedRole } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
-
-  // Only render for students and teachers
-  if (selectedRole !== 'student' && selectedRole !== 'teacher') {
-    return null;
-  }
 
   return (
     <>

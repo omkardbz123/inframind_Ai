@@ -213,8 +213,6 @@ export const ReportFault: React.FC = () => {
               <QrCode className="w-4 h-4 text-maroon-800" />
               <span>5s QR Scan</span>
             </button>
-
-            <VoiceRecorderButton onClassified={handleVoiceClassified} />
           </div>
         )}
       </div>
