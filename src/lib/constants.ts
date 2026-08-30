@@ -209,7 +209,8 @@ export const DEMO_USERS: UserProfile[] = [
   {
     uid: 'user-student-01',
     email: '5454317@mitacsc.edu.in',
-    displayName: 'Omkar Sharma',
+    displayName: 'Omkar Bhujbal',
+    photoURL: '/avatars/user_5454317.png',
     role: 'student',
     collegeId: 'MITACSC-2024-CS-089',
     phone: '+91 98230 11223',

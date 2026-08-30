@@ -12,6 +12,7 @@ interface UserStoreState {
     phone?: string;
     employeeId?: string;
     collegeId?: string;
+    photoURL?: string;
   }) => UserProfile;
   updateUser: (uid: string, updates: Partial<UserProfile>) => void;
   deleteUser: (uid: string) => void;
@@ -27,10 +28,13 @@ export const useUserStore = create<UserStoreState>((set, get) => {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Merge demo users to guarantee standard accounts are present
         const map = new Map<string, UserProfile>();
-        DEMO_USERS.forEach((u) => map.set(u.uid, u));
         parsed.forEach((u: UserProfile) => map.set(u.uid, u));
+        // Overwrite default demo users with latest constants
+        DEMO_USERS.forEach((u) => {
+          const existing = map.get(u.uid);
+          map.set(u.uid, { ...existing, ...u });
+        });
         initialUsers = Array.from(map.values());
       }
     }
@@ -55,6 +59,7 @@ export const useUserStore = create<UserStoreState>((set, get) => {
         role: userData.role,
         department: userData.department,
         phone: userData.phone || '+91 98000 00000',
+        photoURL: userData.photoURL || `/avatars/user_5454317.png`,
         employeeId:
           userData.employeeId ||
           (userData.role === 'employee'
@@ -101,9 +106,8 @@ export const useUserStore = create<UserStoreState>((set, get) => {
         set({ users: updated });
         save(updated);
       } else {
-        // update lastLoginAt
         const updated = get().users.map((u) =>
-          u.uid === existing.uid ? { ...u, lastLoginAt: new Date().toISOString() } : u
+          u.uid === existing.uid ? { ...u, ...user, lastLoginAt: new Date().toISOString() } : u
         );
         set({ users: updated });
         save(updated);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap,
@@ -6,15 +6,25 @@ import {
   Shield,
   Wrench,
   Briefcase,
-  Sparkles,
   ArrowRight,
   Lock,
   Mail,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { UserRole } from '../../types/user';
 import { COLLEGE_CONFIG } from '../../lib/constants';
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
+const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  '632291817556-6qonel2v1pqrv6522meld8jfio14hd42.apps.googleusercontent.com';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -23,6 +33,199 @@ export const LoginPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
   const [inputEmail, setInputEmail] = useState('');
   const [localError, setLocalError] = useState('');
+  const [isAuthenticatingWithGoogle, setIsAuthenticatingWithGoogle] = useState(false);
+
+  const googleButtonContainerRef = useRef<HTMLDivElement | null>(null);
+  const tokenClientRef = useRef<any>(null);
+
+  // Initialize Google Identity Services (GIS) & OAuth2 Token Client
+  useEffect(() => {
+    const initializeGoogleAuth = () => {
+      if (typeof window === 'undefined' || !window.google?.accounts) return;
+
+      try {
+        // 1. Initialize Google ID (JWT One-Tap / Button)
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        // 2. Initialize OAuth2 Token Client for Popup flow
+        tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'openid email profile',
+          callback: async (tokenResponse: any) => {
+            if (tokenResponse.error) {
+              setIsAuthenticatingWithGoogle(false);
+              setLocalError(`Google Sign-In failed: ${tokenResponse.error_description || tokenResponse.error}`);
+              return;
+            }
+
+            if (tokenResponse.access_token) {
+              try {
+                // Fetch authentic Google user info
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: {
+                    Authorization: `Bearer ${tokenResponse.access_token}`,
+                  },
+                });
+
+                if (!res.ok) throw new Error('Failed to retrieve profile from Google');
+
+                const googleUser = await res.json();
+                await processAuthenticatedGoogleUser({
+                  email: googleUser.email,
+                  name: googleUser.name || googleUser.given_name,
+                  picture: googleUser.picture,
+                });
+              } catch (err: any) {
+                setIsAuthenticatingWithGoogle(false);
+                setLocalError(`Google authentication error: ${err.message}`);
+              }
+            }
+          },
+        });
+      } catch (e) {
+        console.warn('Google Identity Services initialization notice:', e);
+      }
+    };
+
+    if (window.google?.accounts) {
+      initializeGoogleAuth();
+    } else {
+      const timer = setInterval(() => {
+        if (window.google?.accounts) {
+          clearInterval(timer);
+          initializeGoogleAuth();
+        }
+      }, 300);
+      return () => clearInterval(timer);
+    }
+  }, []);
+
+  // Process decoded Google JWT or UserInfo payload
+  const processAuthenticatedGoogleUser = async ({
+    email,
+    name,
+    picture,
+  }: {
+    email: string;
+    name: string;
+    picture?: string;
+  }) => {
+    setIsAuthenticatingWithGoogle(true);
+    setLocalError('');
+    clearAuthError();
+
+    const localPart = email.split('@')[0];
+    const startsWithDigit = /^\d/.test(localPart);
+
+    // Auto-detect role by MIT ACSC email convention
+    let role: UserRole = activeTab;
+    if (startsWithDigit) {
+      role = 'student';
+    } else if (email.includes('admin') || email.includes('principal')) {
+      role = 'admin';
+    } else if (email.includes('manager') || email.includes('estate')) {
+      role = 'manager';
+    } else if (
+      email.includes('electrician') ||
+      email.includes('plumber') ||
+      email.includes('tech') ||
+      email.includes('employee')
+    ) {
+      role = 'employee';
+    } else {
+      role = 'teacher';
+    }
+
+    // Default student Omkar avatar if not provided by Google API
+    const finalAvatar =
+      picture ||
+      (email.startsWith('5454317') ? '/avatars/user_5454317.png' : undefined);
+
+    const loginRes = await loginWithGoogle(email, name, role, finalAvatar);
+
+    if (loginRes.success) {
+      window.location.href = '/';
+    } else {
+      setIsAuthenticatingWithGoogle(false);
+      if (loginRes.error) setLocalError(loginRes.error);
+    }
+  };
+
+  // Callback from Google ID Credential JWT
+  const handleGoogleCredentialResponse = async (response: any) => {
+    if (!response.credential) return;
+
+    try {
+      // Decode JWT Payload safely
+      const base64Url = response.credential.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
+
+      await processAuthenticatedGoogleUser({
+        email: payload.email,
+        name: payload.name || payload.given_name,
+        picture: payload.picture,
+      });
+    } catch (e: any) {
+      setLocalError(`Google Token decoding error: ${e.message}`);
+    }
+  };
+
+  // Trigger Google OAuth2 Popup
+  const handleTriggerGoogleOAuth = () => {
+    setLocalError('');
+    clearAuthError();
+    setIsAuthenticatingWithGoogle(true);
+
+    if (tokenClientRef.current) {
+      try {
+        tokenClientRef.current.requestAccessToken({ prompt: 'select_account' });
+        return;
+      } catch (e) {
+        console.warn('tokenClient error:', e);
+      }
+    }
+
+    // Fallback: Direct Google OAuth 2.0 Auth Endpoint Popup Window
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(
+      window.location.origin
+    )}&response_type=token&scope=openid%20profile%20email&prompt=select_account`;
+
+    const width = 500;
+    const height = 620;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const popup = window.open(
+      authUrl,
+      'GoogleSignIn',
+      `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+    );
+
+    if (!popup) {
+      setIsAuthenticatingWithGoogle(false);
+      setLocalError('Popup blocked by browser. Please allow popups for Google Sign-In.');
+    } else {
+      // Listen for popup redirect hash or message
+      const checkPopup = setInterval(() => {
+        if (!popup || popup.closed) {
+          clearInterval(checkPopup);
+          setIsAuthenticatingWithGoogle(false);
+        }
+      }, 1000);
+    }
+  };
 
   const handleDomainLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,44 +252,23 @@ export const LoginPage: React.FC = () => {
 
     const res = await loginWithGoogle(trimmed, userName, activeTab);
     if (res.success) {
-      navigate('/');
-    }
-  };
-
-  const handleGoogleOneClick = async () => {
-    setLocalError('');
-    clearAuthError();
-
-    const typedEmail = inputEmail.trim();
-    const emailToUse =
-      typedEmail || (activeTab === 'student' ? '5454317@mitacsc.edu.in' : 'dr.deshpande@mitacsc.edu.in');
-
-    const nameToUse = typedEmail
-      ? (activeTab === 'student' ? `Student ${typedEmail.split('@')[0]}` : `Prof. ${typedEmail.split('@')[0]}`)
-      : (activeTab === 'student' ? 'Omkar Sharma (Student)' : 'Dr. Rajiv Deshpande (Prof. CS)');
-
-    const googleAvatar =
-      activeTab === 'student'
-        ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80'
-        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80';
-
-    const res = await loginWithGoogle(emailToUse, nameToUse, activeTab, googleAvatar);
-    if (res.success) {
       window.location.href = '/';
-    } else if (res.error) {
-      setLocalError(res.error);
     }
   };
 
   const handleQuickDemoLogin = async (role: UserRole) => {
-    const demoAccounts: Record<UserRole, { email: string; name: string }> = {
+    const demoAccounts: Record<
+      UserRole,
+      { email: string; name: string; photoURL?: string }
+    > = {
       student: {
         email: '5454317@mitacsc.edu.in',
-        name: 'Omkar (TY B.Sc CS)',
+        name: 'Omkar Bhujbal (TE3302)',
+        photoURL: '/avatars/user_5454317.png',
       },
       teacher: {
         email: 'dr.deshpande@mitacsc.edu.in',
-        name: 'Dr. Deshpande (HOD Comp Sci)',
+        name: 'Dr. Rajiv Deshpande (Prof. CS)',
       },
       employee: {
         email: 'rajesh.electrician@mitacsc.edu.in',
@@ -103,9 +285,9 @@ export const LoginPage: React.FC = () => {
     };
 
     const target = demoAccounts[role];
-    const res = await loginWithGoogle(target.email, target.name, role);
+    const res = await loginWithGoogle(target.email, target.name, role, target.photoURL);
     if (res.success) {
-      navigate('/');
+      window.location.href = '/';
     }
   };
 
@@ -186,33 +368,44 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Google Sign-In Primary Button */}
+          {/* Authentic Google Sign-In Trigger Button */}
           <button
             type="button"
-            onClick={handleGoogleOneClick}
-            className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-2xl font-bold text-xs flex items-center justify-center gap-3 shadow-xs hover:shadow-md transition active:scale-98"
+            disabled={isAuthenticatingWithGoogle}
+            onClick={handleTriggerGoogleOAuth}
+            className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-2xl font-bold text-xs flex items-center justify-center gap-3 shadow-xs hover:shadow-md transition active:scale-98 disabled:opacity-50"
           >
-            {/* Google SVG G-Icon */}
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-              />
-            </svg>
-            <span>Sign in with Google Workspace (@mitacsc.edu.in)</span>
+            {isAuthenticatingWithGoogle ? (
+              <Loader2 className="w-4 h-4 animate-spin text-maroon-800" />
+            ) : (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+            )}
+            <span>
+              {isAuthenticatingWithGoogle
+                ? 'Authenticating with Google...'
+                : 'Sign in with Google Workspace (@mitacsc.edu.in)'}
+            </span>
           </button>
+
+          {/* Hidden Container for Google Native GSI Button rendering */}
+          <div ref={googleButtonContainerRef} className="hidden" />
 
           {/* Divider */}
           <div className="flex items-center gap-3">
@@ -285,9 +478,13 @@ export const LoginPage: React.FC = () => {
                 onClick={() => handleQuickDemoLogin('student')}
                 className="p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
               >
-                <GraduationCap className="w-4 h-4 text-maroon-700 shrink-0" />
+                <img
+                  src="/avatars/user_5454317.png"
+                  alt="Omkar"
+                  className="w-5 h-5 rounded-full object-cover ring-1 ring-maroon-300 shrink-0"
+                />
                 <div className="truncate">
-                  <div className="font-bold text-slate-900">Student</div>
+                  <div className="font-bold text-slate-900">Student (Omkar)</div>
                   <div className="text-[10px] text-slate-500 truncate">5454317@mitacsc.edu.in</div>
                 </div>
               </button>

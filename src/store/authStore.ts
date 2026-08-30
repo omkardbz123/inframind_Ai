@@ -27,12 +27,15 @@ const STORAGE_AUTH_KEY = 'campuscare_current_user';
 const STORAGE_GEMINI_KEY = 'campuscare_gemini_key';
 
 export const useAuthStore = create<AuthState>((set, get) => {
-  // Try loading saved user session or default to Student
-  let initialUser: UserProfile | null = DEMO_USERS[0]; // Student 5454317@mitacsc.edu.in
+  let initialUser: UserProfile | null = DEMO_USERS[0];
   try {
     const saved = localStorage.getItem(STORAGE_AUTH_KEY);
     if (saved) {
       initialUser = JSON.parse(saved);
+      if (initialUser && initialUser.email === '5454317@mitacsc.edu.in') {
+        initialUser.photoURL = '/avatars/user_5454317.png';
+        initialUser.displayName = 'Omkar Bhujbal';
+      }
     }
   } catch {
     initialUser = DEMO_USERS[0];
@@ -74,9 +77,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
       const allUsers = useUserStore.getState().users;
       const matched = allUsers.find((u) => u.email.toLowerCase() === email);
 
-      // Email format pattern rule:
-      // If starts with numbers (e.g. 5454317@mitacsc.edu.in) => Student
-      // If starts with words/letters (e.g. sbkhole@mitacsc.edu.in) => Teacher / Staff
       const startsWithDigit = /^\d/.test(localPart);
 
       let determinedRole: UserRole = 'student';
@@ -99,7 +99,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
         ) {
           determinedRole = 'employee';
         } else {
-          // Regular letters like sbkhole@mitacsc.edu.in => Teacher
           determinedRole = 'teacher';
         }
       }
@@ -108,6 +107,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
       if (!resolvedDisplayName) {
         if (matched) {
           resolvedDisplayName = matched.displayName;
+        } else if (email === '5454317@mitacsc.edu.in') {
+          resolvedDisplayName = 'Omkar Bhujbal';
         } else if (determinedRole === 'student') {
           resolvedDisplayName = `Student ${localPart.toUpperCase()}`;
         } else if (determinedRole === 'teacher') {
@@ -118,13 +119,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
         }
       }
 
-      const avatarUrl =
-        photoURL ||
-        matched?.photoURL ||
-        `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(resolvedDisplayName)}&backgroundColor=800020&textColor=ffffff`;
+      const defaultAvatar =
+        email === '5454317@mitacsc.edu.in'
+          ? '/avatars/user_5454317.png'
+          : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(resolvedDisplayName)}&backgroundColor=800020&textColor=ffffff`;
+
+      const avatarUrl = photoURL || matched?.photoURL || defaultAvatar;
 
       const userProfile: UserProfile = matched
-        ? { ...matched, role: determinedRole, photoURL: avatarUrl }
+        ? { ...matched, role: determinedRole, displayName: resolvedDisplayName, photoURL: avatarUrl }
         : {
             uid: `user-${determinedRole}-${Date.now().toString(36)}`,
             email,
@@ -148,7 +151,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
             lastLoginAt: new Date().toISOString(),
           };
 
-      // Register or update into dynamic UserStore
       useUserStore.getState().syncLoginUser(userProfile);
 
       localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(userProfile));
