@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { UserProfile, UserRole } from '../types/user';
 import { DEMO_USERS, COLLEGE_CONFIG } from '../lib/constants';
+import { useUserStore } from './userStore';
 
 interface AuthState {
   currentUser: UserProfile | null;
@@ -42,8 +43,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
     authError: null,
 
     loginWithGoogle: async (inputEmail?: string, inputName?: string, forcedRole?: UserRole) => {
-      const email = (inputEmail || '5454317@mitacsc.edu.in').trim();
-      const name = inputName || (email.split('@')[0]);
+      const email = (inputEmail || '5454317@mitacsc.edu.in').trim().toLowerCase();
+      const localPart = email.split('@')[0];
 
       // Verify domain strictly
       const emailDomain = email.split('@')[1]?.toLowerCase();
@@ -57,29 +58,80 @@ export const useAuthStore = create<AuthState>((set, get) => {
         return { success: false, error: errMsg };
       }
 
-      // Check if matches known demo user or create new profile
-      const matched = DEMO_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase());
-      
-      const determinedRole: UserRole = forcedRole || (matched ? matched.role : (
-        email.includes('admin') || email.includes('principal')
-          ? 'admin'
-          : email.includes('faculty') || email.includes('teacher') || email.includes('dr.') || email.includes('prof')
-          ? 'teacher'
-          : email.includes('plumb') || email.includes('elec') || email.includes('tech')
-          ? 'employee'
-          : 'student'
-      ));
+      // Check if matches known user in store or demo users
+      const allUsers = useUserStore.getState().users;
+      const matched = allUsers.find((u) => u.email.toLowerCase() === email);
 
-      const userProfile: UserProfile = matched ? { ...matched, role: determinedRole } : {
-        uid: `user-google-${Date.now()}`,
-        email,
-        displayName: name,
-        role: determinedRole,
-        collegeId: determinedRole === 'teacher' ? `MITACSC-FAC-${Math.floor(100 + Math.random() * 900)}` : `MITACSC-STU-${email.split('@')[0]}`,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString(),
-      };
+      // Email format pattern rule:
+      // If starts with numbers (e.g. 5454317@mitacsc.edu.in) => Student
+      // If starts with words/letters (e.g. sbkhole@mitacsc.edu.in) => Teacher / Staff
+      const startsWithDigit = /^\d/.test(localPart);
+
+      let determinedRole: UserRole = 'student';
+      if (forcedRole) {
+        determinedRole = forcedRole;
+      } else if (matched) {
+        determinedRole = matched.role;
+      } else if (startsWithDigit) {
+        determinedRole = 'student';
+      } else {
+        if (localPart.includes('admin') || localPart.includes('principal')) {
+          determinedRole = 'admin';
+        } else if (localPart.includes('manager') || localPart.includes('estate')) {
+          determinedRole = 'manager';
+        } else if (
+          localPart.includes('electrician') ||
+          localPart.includes('plumber') ||
+          localPart.includes('tech') ||
+          localPart.includes('employee')
+        ) {
+          determinedRole = 'employee';
+        } else {
+          // Regular letters like sbkhole@mitacsc.edu.in => Teacher
+          determinedRole = 'teacher';
+        }
+      }
+
+      let resolvedDisplayName = inputName;
+      if (!resolvedDisplayName) {
+        if (matched) {
+          resolvedDisplayName = matched.displayName;
+        } else if (determinedRole === 'student') {
+          resolvedDisplayName = `Student ${localPart.toUpperCase()}`;
+        } else if (determinedRole === 'teacher') {
+          const capitalized = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+          resolvedDisplayName = `Prof. ${capitalized}`;
+        } else {
+          resolvedDisplayName = localPart;
+        }
+      }
+
+      const userProfile: UserProfile = matched
+        ? { ...matched, role: determinedRole }
+        : {
+            uid: `user-${determinedRole}-${Date.now().toString(36)}`,
+            email,
+            displayName: resolvedDisplayName,
+            role: determinedRole,
+            collegeId:
+              determinedRole === 'student'
+                ? `MITACSC-2026-${localPart}`
+                : determinedRole === 'teacher'
+                ? `MITACSC-FAC-${Math.floor(100 + Math.random() * 900)}`
+                : undefined,
+            employeeId:
+              determinedRole === 'employee'
+                ? `EMP-STAFF-${Math.floor(100 + Math.random() * 900)}`
+                : determinedRole === 'manager'
+                ? `MGR-ESTATE-${Math.floor(100 + Math.random() * 900)}`
+                : undefined,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+          };
+
+      // Register or update into dynamic UserStore
+      useUserStore.getState().syncLoginUser(userProfile);
 
       localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(userProfile));
       set({
@@ -103,8 +155,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     switchUserRole: (role: UserRole) => {
-      // Find corresponding demo user
-      const demoMatch = DEMO_USERS.find((u) => u.role === role) || DEMO_USERS[0];
+      const allUsers = useUserStore.getState().users;
+      const demoMatch = allUsers.find((u) => u.role === role) || DEMO_USERS.find((u) => u.role === role) || DEMO_USERS[0];
       localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(demoMatch));
       set({
         currentUser: demoMatch,

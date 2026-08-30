@@ -113,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     },
     {
       to: '/user-directory',
-      label: 'Staff Directory',
+      label: 'Campus Directory',
       icon: Users,
       roles: ['admin', 'manager'],
     },
