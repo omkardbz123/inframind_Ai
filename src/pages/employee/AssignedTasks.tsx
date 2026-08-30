@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Wrench,
   Clock,
@@ -14,6 +14,8 @@ import {
   CheckCircle,
   Info,
   Image as ImageIcon,
+  Camera,
+  Upload,
 } from 'lucide-react';
 import { useTicketStore } from '../../store/ticketStore';
 import { useAuthStore } from '../../store/authStore';
@@ -27,13 +29,14 @@ import { TicketDetailsModal } from '../../components/common/TicketDetailsModal';
 export const AssignedTasks: React.FC = () => {
   const { tickets, updateTicketStatus } = useTicketStore();
   const { currentUser, selectedRole } = useAuthStore();
+  const resolveFileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedTicketForDetails, setSelectedTicketForDetails] = useState<Ticket | null>(null);
   const [selectedTicketForResolve, setSelectedTicketForResolve] = useState<Ticket | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('Replaced blown capacitor (3.15 uF) and tested fan speeds 1 to 5. Operational.');
   const [partsUsed, setPartsUsed] = useState('Havells 3.15uF Capacitor, 2.5mm Wire Sleeve');
   const [actualCost, setActualCost] = useState<number>(350);
-  const [proofPhoto, setProofPhoto] = useState('https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80');
+  const [resolutionPhotos, setResolutionPhotos] = useState<string[]>([]);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,9 +141,32 @@ export const AssignedTasks: React.FC = () => {
     );
   };
 
+  const handleResolutionPhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files[0]) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        if (uploadEvent.target?.result) {
+          setResolutionPhotos((prev) => [...prev, uploadEvent.target!.result as string]);
+        }
+      };
+      reader.readAsDataURL(files[0]);
+    }
+  };
+
   const handleResolveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicketForResolve || !currentUser) return;
+
+    const parts = partsUsed
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const finalPhotos =
+      resolutionPhotos.length > 0
+        ? resolutionPhotos
+        : ['https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80'];
 
     updateTicketStatus(
       selectedTicketForResolve.id,
@@ -148,9 +174,9 @@ export const AssignedTasks: React.FC = () => {
       currentUser.uid,
       currentUser.displayName,
       resolutionNotes,
-      [proofPhoto],
+      finalPhotos,
       actualCost,
-      partsUsed.split(',').map((p) => p.trim())
+      parts
     );
 
     sendTransactionalEmail({
@@ -161,13 +187,15 @@ export const AssignedTasks: React.FC = () => {
         ...selectedTicketForResolve,
         status: 'resolved',
         resolutionNotes,
-        partsUsed: partsUsed.split(',').map((p) => p.trim()),
+        resolvedPhotoURLs: finalPhotos,
+        partsUsed: parts,
         actualCost,
       },
       hasPdfAttachment: true,
     });
 
     setSelectedTicketForResolve(null);
+    setResolutionPhotos([]);
   };
 
   return (
@@ -506,6 +534,48 @@ export const AssignedTasks: React.FC = () => {
                   onChange={(e) => setActualCost(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700"
                 />
+              </div>
+
+              {/* Attach Resolution Proof Photos */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-slate-700">Attach Resolution Proof Photos:</label>
+                  <span className="text-[10px] text-slate-400">Show fixed hardware</span>
+                </div>
+
+                <input
+                  type="file"
+                  ref={resolveFileInputRef}
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleResolutionPhotoCapture}
+                  className="hidden"
+                />
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {resolutionPhotos.map((url, idx) => (
+                    <div key={idx} className="w-16 h-16 rounded-xl overflow-hidden border border-emerald-300 shadow-xs relative group">
+                      <img src={url} alt="Resolution proof" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setResolutionPhotos(resolutionPhotos.filter((_, i) => i !== idx))}
+                        className="absolute top-1 right-1 w-4 h-4 bg-rose-600 text-white rounded-full flex items-center justify-center text-[9px] shadow-sm hover:bg-rose-700"
+                        title="Remove photo"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => resolveFileInputRef.current?.click()}
+                    className="w-16 h-16 rounded-xl border-2 border-dashed border-emerald-300 hover:border-emerald-600 bg-emerald-50/50 flex flex-col items-center justify-center text-emerald-800 hover:bg-emerald-50 transition text-[9px] font-bold"
+                  >
+                    <Camera className="w-4 h-4 mb-0.5 text-emerald-700" />
+                    <span>Snap Proof</span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
