@@ -194,6 +194,13 @@ export function sendTransactionalEmail(params: {
               </table>
             </div>
 
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; margin: 16px 0; display: flex; align-items: center; justify-content: space-between;">
+              <div style="font-size: 12px; color: #1e293b;">
+                <strong>📎 Attached Document:</strong> <span style="font-family: monospace; color: #821930; font-weight: bold;">MIT-ACSC-WorkOrder-${ticket.id}.pdf</span>
+                <div style="color: #64748b; font-size: 11px;">Official signed completion record with parts & technician verification</div>
+              </div>
+            </div>
+
             <p style="font-size: 13px; color: #065f46; font-weight: bold;">Thank you for helping keep MIT ACSC campus safe and functional!</p>
           </div>
         </div>
