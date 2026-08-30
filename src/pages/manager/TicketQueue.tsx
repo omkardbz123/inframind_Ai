@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   FileText,
   X,
+  Info,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useTicketStore } from '../../store/ticketStore';
 import { useAuthStore } from '../../store/authStore';
@@ -12,6 +14,7 @@ import { DEMO_USERS } from '../../lib/constants';
 import { Ticket } from '../../types/ticket';
 import { downloadTicketReportPDF } from '../../lib/pdfGenerator';
 import { sendTransactionalEmail } from '../../lib/emailSimulator';
+import { TicketDetailsModal } from '../../components/common/TicketDetailsModal';
 
 export const TicketQueue: React.FC = () => {
   const { tickets, assignTicket } = useTicketStore();
@@ -19,6 +22,7 @@ export const TicketQueue: React.FC = () => {
 
   const [search, setSearch] = useState('');
   const [selectedTicketForAssign, setSelectedTicketForAssign] = useState<Ticket | null>(null);
+  const [selectedTicketForDetails, setSelectedTicketForDetails] = useState<Ticket | null>(null);
 
   const technicians = DEMO_USERS.filter((u) => u.role === 'employee');
 
@@ -154,7 +158,14 @@ export const TicketQueue: React.FC = () => {
                       )}
                     </td>
 
-                    <td className="p-3.5 text-right space-x-2">
+                    <td className="p-3.5 text-right space-x-1.5">
+                      <button
+                        onClick={() => setSelectedTicketForDetails(ticket)}
+                        className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition"
+                        title="Inspect Ticket Details & Photos"
+                      >
+                        <Info className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => setSelectedTicketForAssign(ticket)}
                         className="px-3 py-1.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold transition shadow-xs"
@@ -215,6 +226,13 @@ export const TicketQueue: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Details & Photos Modal */}
+      <TicketDetailsModal
+        ticket={selectedTicketForDetails}
+        isOpen={!!selectedTicketForDetails}
+        onClose={() => setSelectedTicketForDetails(null)}
+      />
     </div>
   );
 };

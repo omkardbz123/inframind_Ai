@@ -12,6 +12,8 @@ import {
   MapPin,
   Tag,
   CheckCircle,
+  Info,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useTicketStore } from '../../store/ticketStore';
 import { useAuthStore } from '../../store/authStore';
@@ -20,11 +22,13 @@ import { DepartmentType } from '../../types/user';
 import { DEPARTMENTS, CAMPUS_BUILDINGS } from '../../lib/constants';
 import { downloadTicketReportPDF } from '../../lib/pdfGenerator';
 import { sendTransactionalEmail } from '../../lib/emailSimulator';
+import { TicketDetailsModal } from '../../components/common/TicketDetailsModal';
 
 export const AssignedTasks: React.FC = () => {
   const { tickets, updateTicketStatus } = useTicketStore();
   const { currentUser, selectedRole } = useAuthStore();
 
+  const [selectedTicketForDetails, setSelectedTicketForDetails] = useState<Ticket | null>(null);
   const [selectedTicketForResolve, setSelectedTicketForResolve] = useState<Ticket | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('Replaced blown capacitor (3.15 uF) and tested fan speeds 1 to 5. Operational.');
   const [partsUsed, setPartsUsed] = useState('Havells 3.15uF Capacitor, 2.5mm Wire Sleeve');
@@ -370,6 +374,31 @@ export const AssignedTasks: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Photo Preview Strip if photos attached */}
+                  {ticket.photoURLs && ticket.photoURLs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTicketForDetails(ticket)}
+                      className="mt-2 w-full p-2 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-between text-slate-700 transition"
+                    >
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={ticket.photoURLs[0]}
+                          alt="Fault photo"
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-300 shrink-0"
+                        />
+                        <div className="text-left">
+                          <div className="text-[11px] font-bold text-slate-900 flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3 text-maroon-800" />
+                            <span>{ticket.photoURLs.length} Fault Photo{ticket.photoURLs.length > 1 ? 's' : ''} Attached</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500">Click to inspect photo & proof</div>
+                        </div>
+                      </div>
+                      <span className="text-maroon-800 font-bold text-[10px]">View →</span>
+                    </button>
+                  )}
+
                   {/* SLA target deadline */}
                   <div className="mt-3 flex items-center justify-between text-xs font-mono">
                     <span className="text-slate-500">Target SLA:</span>
@@ -391,6 +420,15 @@ export const AssignedTasks: React.FC = () => {
                     title="Download Work Order PDF"
                   >
                     <FileText className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedTicketForDetails(ticket)}
+                    className="p-2 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl hover:text-blue-900 border border-blue-200 transition flex items-center gap-1 font-bold text-xs"
+                    title="Inspect Ticket Details & Uploaded Photos"
+                  >
+                    <Info className="w-4 h-4" />
+                    <span className="text-[11px]">Details</span>
                   </button>
 
                   {!isResolved && (
@@ -489,6 +527,16 @@ export const AssignedTasks: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Ticket Details & Uploaded Photos Inspection Modal */}
+      <TicketDetailsModal
+        ticket={selectedTicketForDetails}
+        isOpen={!!selectedTicketForDetails}
+        onClose={() => setSelectedTicketForDetails(null)}
+        onStartWork={(id) => handleStartWork(id)}
+        onOpenResolveModal={(t) => setSelectedTicketForResolve(t)}
+        canManage={isTechnician || isAdminOrManager}
+      />
     </div>
   );
 };

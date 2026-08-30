@@ -65,9 +65,7 @@ export const ReportFault: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('medium');
-  const [photoURLs, setPhotoURLs] = useState<string[]>([
-    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80',
-  ]);
+  const [photoURLs, setPhotoURLs] = useState<string[]>([]);
   const [urgencyScore, setUrgencyScore] = useState<number>(65);
   const [source, setSource] = useState<'manual' | 'qr_scan' | 'voice'>('manual');
   const [scannedAssetTag, setScannedAssetTag] = useState<string>('');
@@ -90,9 +88,11 @@ export const ReportFault: React.FC = () => {
     if (asset.roomNumber) setRoomNumber(asset.roomNumber);
     setScannedAssetTag(asset.assetTag);
     setSource('qr_scan');
-    setTitle(`${asset.name} Fault`);
-    setDescription(`Scanned physical QR tag (${asset.assetTag}). Equipment requires inspection.`);
-    setStep(3);
+    setTitle(`${asset.name} Malfunction / Issue`);
+    setDescription(
+      `[QR Scanned Asset: ${asset.assetTag}]\nDevice: ${asset.name}\nLocation: ${asset.building}, Floor ${asset.floor}, ${asset.wing.toUpperCase()} Wing (Room ${asset.roomNumber || 'General'})\nEquipment requires diagnostic inspection.`
+    );
+    setStep(3); // Directly transitions to Step 3 for entering further details & photo proof
   };
 
   const handleVoiceClassified = (result: any, transcript: string) => {
@@ -485,8 +485,16 @@ export const ReportFault: React.FC = () => {
 
               <div className="flex flex-wrap items-center gap-3">
                 {photoURLs.map((url, idx) => (
-                  <div key={idx} className="w-20 h-20 rounded-xl overflow-hidden border border-slate-200 shadow-xs relative">
+                  <div key={idx} className="w-20 h-20 rounded-xl overflow-hidden border border-slate-200 shadow-xs relative group">
                     <img src={url} alt="Proof" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setPhotoURLs(photoURLs.filter((_, i) => i !== idx))}
+                      className="absolute top-1 right-1 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center text-[10px] shadow-sm hover:bg-rose-700 transition"
+                      title="Remove photo"
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
                 
