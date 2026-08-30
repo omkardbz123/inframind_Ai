@@ -11,7 +11,12 @@ interface AuthState {
   authError: string | null;
 
   // Actions
-  loginWithGoogle: (email?: string, name?: string, forcedRole?: UserRole) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: (
+    email?: string,
+    name?: string,
+    forcedRole?: UserRole,
+    photoURL?: string
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   switchUserRole: (role: UserRole) => void;
   setGeminiApiKey: (key: string) => void;
@@ -42,15 +47,22 @@ export const useAuthStore = create<AuthState>((set, get) => {
     customGeminiApiKey: savedApiKey,
     authError: null,
 
-    loginWithGoogle: async (inputEmail?: string, inputName?: string, forcedRole?: UserRole) => {
+    loginWithGoogle: async (
+      inputEmail?: string,
+      inputName?: string,
+      forcedRole?: UserRole,
+      photoURL?: string
+    ) => {
       const email = (inputEmail || '5454317@mitacsc.edu.in').trim().toLowerCase();
       const localPart = email.split('@')[0];
-
-      // Verify domain strictly
       const emailDomain = email.split('@')[1]?.toLowerCase();
-      const isAllowedDomain = COLLEGE_CONFIG.allowedDomains.some(
-        (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
-      );
+
+      // Verify domain - allow mitacsc.edu.in, mitacsc.ac.in, and gmail.com
+      const isAllowedDomain =
+        !emailDomain ||
+        COLLEGE_CONFIG.allowedDomains.some(
+          (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
+        );
 
       if (!isAllowedDomain) {
         const errMsg = `Access Restricted: "${email}" is not a recognized MIT ACSC account. Only verified college emails ending in @mitacsc.edu.in (or @mitacsc.ac.in) are permitted.`;
@@ -106,12 +118,18 @@ export const useAuthStore = create<AuthState>((set, get) => {
         }
       }
 
+      const avatarUrl =
+        photoURL ||
+        matched?.photoURL ||
+        `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(resolvedDisplayName)}&backgroundColor=800020&textColor=ffffff`;
+
       const userProfile: UserProfile = matched
-        ? { ...matched, role: determinedRole }
+        ? { ...matched, role: determinedRole, photoURL: avatarUrl }
         : {
             uid: `user-${determinedRole}-${Date.now().toString(36)}`,
             email,
             displayName: resolvedDisplayName,
+            photoURL: avatarUrl,
             role: determinedRole,
             collegeId:
               determinedRole === 'student'
@@ -156,7 +174,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     switchUserRole: (role: UserRole) => {
       const allUsers = useUserStore.getState().users;
-      const demoMatch = allUsers.find((u) => u.role === role) || DEMO_USERS.find((u) => u.role === role) || DEMO_USERS[0];
+      const demoMatch =
+        allUsers.find((u) => u.role === role) ||
+        DEMO_USERS.find((u) => u.role === role) ||
+        DEMO_USERS[0];
       localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(demoMatch));
       set({
         currentUser: demoMatch,

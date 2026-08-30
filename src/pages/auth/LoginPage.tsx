@@ -57,14 +57,24 @@ export const LoginPage: React.FC = () => {
     setLocalError('');
     clearAuthError();
 
-    const defaultEmail =
-      activeTab === 'student' ? '5454317@mitacsc.edu.in' : 'dr.deshpande@mitacsc.edu.in';
-    const defaultName =
-      activeTab === 'student' ? 'Omkar (TY B.Sc CS)' : 'Dr. Rajiv Deshpande (Prof. CS)';
+    const typedEmail = inputEmail.trim();
+    const emailToUse =
+      typedEmail || (activeTab === 'student' ? '5454317@mitacsc.edu.in' : 'dr.deshpande@mitacsc.edu.in');
 
-    const res = await loginWithGoogle(defaultEmail, defaultName, activeTab);
+    const nameToUse = typedEmail
+      ? (activeTab === 'student' ? `Student ${typedEmail.split('@')[0]}` : `Prof. ${typedEmail.split('@')[0]}`)
+      : (activeTab === 'student' ? 'Omkar Sharma (Student)' : 'Dr. Rajiv Deshpande (Prof. CS)');
+
+    const googleAvatar =
+      activeTab === 'student'
+        ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80'
+        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80';
+
+    const res = await loginWithGoogle(emailToUse, nameToUse, activeTab, googleAvatar);
     if (res.success) {
-      navigate('/');
+      window.location.href = '/';
+    } else if (res.error) {
+      setLocalError(res.error);
     }
   };
 

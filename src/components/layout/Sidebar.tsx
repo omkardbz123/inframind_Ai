@@ -152,9 +152,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       {/* Role Profile Info Card */}
       <div className="p-4 border-b border-slate-100 bg-slate-50/70">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-xl bg-maroon-800 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
-            {currentUser?.displayName?.[0] || 'M'}
-          </div>
+          {currentUser?.photoURL ? (
+            <img
+              src={currentUser.photoURL}
+              alt={currentUser.displayName}
+              className="w-10 h-10 rounded-xl object-cover ring-2 ring-maroon-100 shadow-xs shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-maroon-800 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
+              {currentUser?.displayName?.[0] || 'M'}
+            </div>
+          )}
           <div className="overflow-hidden">
             <div className="font-bold text-xs text-slate-900 truncate">{currentUser?.displayName}</div>
             <div className="text-[11px] text-maroon-800 font-semibold capitalize flex items-center gap-1.5 mt-0.5">

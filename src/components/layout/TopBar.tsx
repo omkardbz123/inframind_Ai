@@ -247,9 +247,17 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                 }}
                 className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition"
               >
-                <div className="w-7 h-7 rounded-lg bg-maroon-800 text-white font-bold text-xs flex items-center justify-center">
-                  {currentUser?.displayName?.[0] || 'M'}
-                </div>
+                {currentUser?.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt={currentUser.displayName}
+                    className="w-7 h-7 rounded-lg object-cover ring-1 ring-maroon-200 shrink-0"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-lg bg-maroon-800 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    {currentUser?.displayName?.[0] || 'M'}
+                  </div>
+                )}
                 <div className="hidden xl:block text-left pr-1">
                   <div className="text-xs font-bold text-slate-800 truncate max-w-[120px]">
                     {currentUser?.displayName?.split(' ')[0]}
@@ -262,12 +270,25 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
 
               {showProfileMenu && (
                 <div className="absolute right-0 mt-2 w-72 p-3 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 text-xs animate-in fade-in duration-150 space-y-3">
-                  <div className="pb-3 border-b border-slate-100">
-                    <div className="font-bold text-slate-900">{currentUser?.displayName}</div>
-                    <div className="text-slate-500 font-mono text-[11px] truncate">{currentUser?.email}</div>
-                    <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-maroon-50 text-maroon-800 border border-maroon-100 rounded-lg text-[10px] font-bold uppercase">
-                      <RoleIcon className="w-3 h-3 text-maroon-800" />
-                      <span>{selectedRole} Portal Active</span>
+                  <div className="pb-3 border-b border-slate-100 flex items-start gap-3">
+                    {currentUser?.photoURL ? (
+                      <img
+                        src={currentUser.photoURL}
+                        alt={currentUser.displayName}
+                        className="w-10 h-10 rounded-xl object-cover ring-2 ring-maroon-100 shadow-xs shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-maroon-800 text-white font-bold text-sm flex items-center justify-center shadow-xs shrink-0">
+                        {currentUser?.displayName?.[0] || 'M'}
+                      </div>
+                    )}
+                    <div className="overflow-hidden">
+                      <div className="font-bold text-slate-900 truncate">{currentUser?.displayName}</div>
+                      <div className="text-slate-500 font-mono text-[11px] truncate">{currentUser?.email}</div>
+                      <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 bg-maroon-50 text-maroon-800 border border-maroon-100 rounded-lg text-[9px] font-bold uppercase">
+                        <RoleIcon className="w-3 h-3 text-maroon-800" />
+                        <span>{selectedRole} Portal</span>
+                      </div>
                     </div>
                   </div>
 
