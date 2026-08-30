@@ -15,6 +15,7 @@ import {
   Wrench,
   Briefcase,
   Shield,
+  PlusCircle,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { COLLEGE_CONFIG } from '../../lib/constants';
@@ -48,6 +49,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
   const openTicketsCount = tickets.filter((t) => t.status === 'open' || t.status === 'assigned').length;
   const criticalCount = tickets.filter((t) => t.priority === 'critical' && t.status !== 'resolved').length;
   const RoleIcon = ROLE_ICON_MAP[selectedRole] || GraduationCap;
+  const isStudentOrTeacher = selectedRole === 'student' || selectedRole === 'teacher';
 
   return (
     <>
@@ -83,7 +85,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
             </Link>
           </div>
 
-          {/* Middle: Active Role Badge & Portals Directory Navigation */}
+          {/* Middle: Active Role Badge & Portals Directory Navigation (Only for Staff/Management) */}
           <div className="hidden lg:flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs">
               <RoleIcon className="w-3.5 h-3.5 text-maroon-800" />
@@ -91,55 +93,73 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
               <span className="text-[10px] font-mono text-emerald-700 font-bold">● Active</span>
             </div>
 
-            <Link
-              to="/portals"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 text-xs font-bold transition shadow-xs"
-              title="Open Multi-Role Portals Directory"
-            >
-              <Users className="w-3.5 h-3.5 text-maroon-800" />
-              <span>Portals Gateway</span>
-              <span className="px-1.5 py-0.2 bg-maroon-800 text-white text-[9px] rounded-full font-mono font-bold">
-                5 Roles
-              </span>
-            </Link>
+            {!isStudentOrTeacher && (
+              <Link
+                to="/portals"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 text-xs font-bold transition shadow-xs"
+                title="Open Multi-Role Portals Directory"
+              >
+                <Users className="w-3.5 h-3.5 text-maroon-800" />
+                <span>Portals Directory</span>
+                <span className="px-1.5 py-0.2 bg-maroon-800 text-white text-[9px] rounded-full font-mono font-bold">
+                  5 Roles
+                </span>
+              </Link>
+            )}
           </div>
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2">
-            {/* Portals Gateway Link for Mobile/Tablet */}
-            <Link
-              to="/portals"
-              className="lg:hidden p-2 rounded-xl bg-maroon-50 text-maroon-800 border border-maroon-200 text-xs font-bold flex items-center gap-1"
-              title="Portals Gateway"
-            >
-              <Users className="w-4 h-4 text-maroon-800" />
-            </Link>
+            {/* Quick File Complaint Button for Students/Teachers */}
+            {isStudentOrTeacher && (
+              <Link
+                to="/report-fault"
+                className="px-3 py-1.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">File Complaint</span>
+              </Link>
+            )}
 
-            {/* Gemini Key Config */}
-            <button
-              onClick={() => setIsGeminiKeyOpen(true)}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
-                customGeminiApiKey
-                  ? 'bg-maroon-50 border-maroon-300 text-maroon-800'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-              title="Gemini 2.0 Flash AI Settings"
-            >
-              <Key className="w-3.5 h-3.5 text-maroon-700" />
-              <span className="hidden xl:inline text-[11px]">
-                {customGeminiApiKey ? 'Gemini AI Active' : 'Gemini Key'}
-              </span>
-            </button>
+            {/* Admin/Manager specific buttons */}
+            {!isStudentOrTeacher && (
+              <>
+                {/* Portals Gateway Link for Mobile/Tablet */}
+                <Link
+                  to="/portals"
+                  className="lg:hidden p-2 rounded-xl bg-maroon-50 text-maroon-800 border border-maroon-200 text-xs font-bold flex items-center gap-1"
+                  title="Portals Gateway"
+                >
+                  <Users className="w-4 h-4 text-maroon-800" />
+                </Link>
 
-            {/* Email & PDF Logs */}
-            <button
-              onClick={() => setIsEmailLogOpen(true)}
-              className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
-              title="Inspect Outbound Emails & PDF Work Orders"
-            >
-              <Mail className="w-3.5 h-3.5 text-maroon-700" />
-              <span className="hidden sm:inline text-[11px]">Email & PDF Logs</span>
-            </button>
+                {/* Gemini Key Config */}
+                <button
+                  onClick={() => setIsGeminiKeyOpen(true)}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+                    customGeminiApiKey
+                      ? 'bg-maroon-50 border-maroon-300 text-maroon-800'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                  title="Gemini 2.0 Flash AI Settings"
+                >
+                  <Key className="w-3.5 h-3.5 text-maroon-700" />
+                  <span className="hidden xl:inline text-[11px]">
+                    {customGeminiApiKey ? 'Gemini AI Active' : 'Gemini Key'}
+                  </span>
+                </button>
+
+                {/* Email & PDF Logs */}
+                <button
+                  onClick={() => setIsEmailLogOpen(true)}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                  title="Inspect Outbound Emails & PDF Work Orders"
+                >
+                  <Mail className="w-3.5 h-3.5 text-maroon-700" />
+                  <span className="hidden sm:inline text-[11px]">Email & PDF Logs</span>
+                </button>
+              </>
+            )}
 
             {/* Emergency SOS Button */}
             <button

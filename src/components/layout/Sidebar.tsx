@@ -34,24 +34,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   ).length;
 
   const navItems = [
-    // Common / Student & Teacher
+    // Student & Teacher Specific Navigation
     {
       to: '/',
-      label: 'Campus Overview',
+      label: selectedRole === 'student' || selectedRole === 'teacher' ? 'My Complaint Dashboard' : 'Campus Overview',
       icon: LayoutDashboard,
-      roles: ['admin', 'manager', 'employee', 'student', 'teacher'],
-    },
-    {
-      to: '/portals',
-      label: 'Portals Gateway',
-      icon: Users,
-      badge: '5 Roles',
-      badgeColor: 'bg-maroon-50 text-maroon-800 border-maroon-200',
-      roles: ['admin', 'manager', 'employee', 'student', 'teacher'],
+      roles: ['student', 'teacher', 'admin', 'manager', 'employee'],
     },
     {
       to: '/report-fault',
-      label: 'Report Fault',
+      label: 'File a Complaint',
       icon: PlusCircle,
       badge: 'Quick',
       badgeColor: 'bg-maroon-50 text-maroon-800 border-maroon-200',
@@ -59,15 +51,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     },
     {
       to: '/my-tickets',
-      label: 'My Tickets',
+      label: 'My Ongoing Complaints',
       icon: TicketIcon,
+      badge: openCount > 0 && (selectedRole === 'student' || selectedRole === 'teacher') ? `${openCount}` : undefined,
+      badgeColor: 'bg-maroon-50 text-maroon-800 border-maroon-200',
       roles: ['student', 'teacher'],
     },
 
     // Employee / Tech view
     {
       to: '/assigned-tasks',
-      label: 'My Assigned Work',
+      label: 'My Assigned Tasks',
       icon: Wrench,
       badge: assignedCount > 0 ? `${assignedCount}` : undefined,
       badgeColor: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -109,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       to: '/risk-map',
       label: 'Campus Risk Map',
       icon: MapPin,
-      roles: ['admin', 'manager', 'student', 'teacher', 'employee'],
+      roles: ['admin', 'manager'],
     },
     {
       to: '/analytics-reports',
@@ -121,6 +115,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       to: '/user-directory',
       label: 'Staff Directory',
       icon: Users,
+      roles: ['admin', 'manager'],
+    },
+    {
+      to: '/portals',
+      label: 'Portals Directory',
+      icon: Users,
+      badge: '5 Roles',
+      badgeColor: 'bg-maroon-50 text-maroon-800 border-maroon-200',
       roles: ['admin', 'manager'],
     },
   ];

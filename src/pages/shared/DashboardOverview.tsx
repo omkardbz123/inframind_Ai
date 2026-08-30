@@ -16,6 +16,9 @@ import {
   FileText,
   Activity,
   Layers,
+  Phone,
+  CheckCircle,
+  Star,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTicketStore } from '../../store/ticketStore';
@@ -29,13 +32,25 @@ import { downloadTicketReportPDF } from '../../lib/pdfGenerator';
 export const DashboardOverview: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, selectedRole } = useAuthStore();
-  const { tickets } = useTicketStore();
+  const { tickets, submitTicketFeedback } = useTicketStore();
   const { assets } = useAssetStore();
   const { cameras } = useCCTVStore();
 
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [ratingModalTicketId, setRatingModalTicketId] = useState<string | null>(null);
+  const [ratingScore, setRatingScore] = useState<number>(5);
+  const [ratingComment, setRatingComment] = useState('Quick fix by maintenance team.');
 
-  // Statistics
+  const isStudentOrTeacher = selectedRole === 'student' || selectedRole === 'teacher';
+
+  // User's own tickets (complaints)
+  const myTickets = tickets.filter(
+    (t) => t.reporterId === currentUser?.uid || (isStudentOrTeacher && t.reporterEmail === currentUser?.email)
+  );
+  const myActiveTickets = myTickets.filter((t) => t.status !== 'resolved');
+  const myResolvedTickets = myTickets.filter((t) => t.status === 'resolved');
+
+  // Facilities & Management Statistics (Only for Manager/Admin/Technician)
   const openTickets = tickets.filter((t) => t.status === 'open' || t.status === 'assigned');
   const criticalTickets = tickets.filter((t) => t.priority === 'critical' && t.status !== 'resolved');
   const criticalAssets = assets.filter((a) => a.predictiveScore >= 80);
@@ -45,28 +60,343 @@ export const DashboardOverview: React.FC = () => {
     navigate('/report-fault');
   };
 
+  const handleRatingSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ratingModalTicketId) return;
+    submitTicketFeedback(ratingModalTicketId, ratingScore, ratingComment);
+    setRatingModalTicketId(null);
+    alert('Thank you for your feedback!');
+  };
+
+  // ==========================================
+  // 1. STUDENT & TEACHER DEDICATED VIEW
+  // Only sees File Complaint and Ongoing Complaint Status
+  // ==========================================
+  if (isStudentOrTeacher) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto">
+        {/* Welcome & Quick Action Card */}
+        <div className="p-6 sm:p-8 bg-gradient-to-br from-maroon-800 via-maroon-900 to-maroon-950 text-white rounded-3xl shadow-xl shadow-maroon-950/15 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 text-white/90 border border-white/20 rounded-full text-xs font-semibold backdrop-blur-sm">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <span>MIT ACSC Alandi • {selectedRole === 'student' ? 'Student Desk' : 'Faculty Desk'}</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                Welcome, {currentUser?.displayName} 👋
+              </h2>
+              <p className="text-xs sm:text-sm text-maroon-100 max-w-xl leading-relaxed">
+                Need anything fixed in your classroom, lab, washroom, or corridor? File a complaint or scan equipment to dispatch technicians immediately.
+              </p>
+            </div>
+
+            {/* Primary Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto shrink-0">
+              <button
+                onClick={() => navigate('/report-fault')}
+                className="px-6 py-3.5 bg-white hover:bg-slate-50 text-maroon-900 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
+              >
+                <PlusCircle className="w-4 h-4 text-maroon-800 shrink-0" />
+                <span>File a New Complaint</span>
+              </button>
+              <button
+                onClick={() => setIsQRModalOpen(true)}
+                className="px-6 py-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+              >
+                <QrCode className="w-4 h-4 shrink-0" />
+                <span>5s Equipment QR Scan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ONGOING COMPLAINT STATUS TRACKER */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+            <div>
+              <h3 className="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-maroon-800" />
+                <span>My Ongoing Complaints & Live Status</span>
+                <span className="px-2.5 py-0.5 bg-maroon-50 text-maroon-800 text-xs font-mono font-bold rounded-full border border-maroon-200">
+                  {myActiveTickets.length} Active
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Track resolution progress, assigned technician notes, and target completion times
+              </p>
+            </div>
+
+            {myActiveTickets.length > 0 && (
+              <button
+                onClick={() => navigate('/report-fault')}
+                className="text-xs font-bold text-maroon-800 hover:text-maroon-950 flex items-center gap-1 hover:underline"
+              >
+                <span>+ Report Another Issue</span>
+              </button>
+            )}
+          </div>
+
+          {/* Active Complaints List */}
+          {myActiveTickets.length === 0 ? (
+            <div className="white-card p-8 sm:p-10 text-center rounded-3xl space-y-3 border-2 border-dashed border-slate-200">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-900">No active complaints pending</h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                All your previous maintenance requests have been resolved. If you notice any electrical, plumbing, fan, light, or projector issues, click below.
+              </p>
+              <button
+                onClick={() => navigate('/report-fault')}
+                className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold text-xs rounded-xl shadow-xs transition"
+              >
+                File a Complaint Now →
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {myActiveTickets.map((ticket) => {
+                const isCritical = ticket.priority === 'critical';
+                const isInProgress = ticket.status === 'in_progress';
+                const isAssigned = ticket.status === 'assigned';
+
+                return (
+                  <div
+                    key={ticket.id}
+                    className="white-card p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-maroon-200 transition"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-maroon-800">#{ticket.id}</span>
+                          {isCritical && (
+                            <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-mono font-bold rounded">
+                              URGENT
+                            </span>
+                          )}
+                        </div>
+
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border uppercase ${
+                            isInProgress
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : isAssigned
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {ticket.status === 'open' ? 'In Triage' : ticket.status.replace('_', ' ')}
+                        </span>
+                      </div>
+
+                      <h4 className="font-bold text-sm text-slate-900">{ticket.title}</h4>
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">{ticket.description}</p>
+
+                      {/* Location & Technician Box */}
+                      <div className="mt-3 p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-1.5">
+                        <div>
+                          <strong>Location:</strong> {ticket.building} • Floor {ticket.floor} (Room {ticket.roomNumber || 'General'})
+                        </div>
+                        <div>
+                          <strong>Department:</strong> <span className="capitalize">{ticket.category}</span> ({ticket.subcategory})
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                          <span className="text-slate-500">Assigned Technician:</span>
+                          <span className="font-bold text-slate-900">
+                            {ticket.assignedToName || 'Under department review'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] font-mono">
+                          <span className="text-slate-500">Target Resolution:</span>
+                          <span className="text-amber-800 font-bold">
+                            {new Date(ticket.slaDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(ticket.slaDeadline).toLocaleDateString()})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Logged: {new Date(ticket.createdAt).toLocaleDateString()}
+                      </span>
+                      <button
+                        onClick={() => downloadTicketReportPDF(ticket)}
+                        className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-maroon-700" />
+                        <span>Download Work Slip PDF</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Recently Resolved Section if any */}
+        {myResolvedTickets.length > 0 && (
+          <div className="space-y-3 pt-4">
+            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Recently Resolved Complaints</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {myResolvedTickets.slice(0, 2).map((ticket) => (
+                <div key={ticket.id} className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-emerald-900">#{ticket.id}</span>
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
+                      RESOLVED
+                    </span>
+                  </div>
+                  <div className="font-bold text-slate-900">{ticket.title}</div>
+                  <div className="text-emerald-800 text-[11px]">{ticket.resolutionNotes || 'Repair verified and closed.'}</div>
+
+                  <div className="pt-2 border-t border-emerald-100 flex items-center justify-between">
+                    {ticket.feedbackRating ? (
+                      <div className="flex items-center gap-1 text-amber-500 font-bold text-[11px]">
+                        <Star className="w-3.5 h-3.5 fill-amber-400" />
+                        <span>Rated: {ticket.feedbackRating}/5 Stars</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setRatingModalTicketId(ticket.id)}
+                        className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold shadow-xs flex items-center gap-1"
+                      >
+                        <Star className="w-3 h-3" />
+                        <span>Rate Service</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => downloadTicketReportPDF(ticket)}
+                      className="text-emerald-900 font-bold text-[11px] hover:underline"
+                    >
+                      Download Receipt PDF
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Campus Emergency Helplines Info Box */}
+        <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-rose-100 text-rose-700 rounded-2xl shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-slate-900 text-xs sm:text-sm">Campus Emergency or Hazardous Breakdown?</div>
+              <div className="text-[11px] text-slate-500">
+                For electrical sparking, water floods, or immediate danger, use Emergency SOS or contact Security Gate.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={`tel:${COLLEGE_CONFIG.emergencyHelpline}`}
+              className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-xs"
+            >
+              <Phone className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Campus Helpline</span>
+            </a>
+          </div>
+        </div>
+
+        {/* 5-Star Rating Modal */}
+        {ratingModalTicketId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="relative w-full max-w-sm bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 text-center">
+              <h3 className="text-base font-bold text-slate-900 mb-1">Rate Maintenance Service</h3>
+              <p className="text-xs text-slate-500 mb-4">How satisfied are you with the repair resolution?</p>
+
+              <div className="flex items-center justify-center gap-2 mb-4">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRatingScore(star)}
+                    className="p-1 hover:scale-110 transition"
+                  >
+                    <Star
+                      className={`w-7 h-7 ${
+                        star <= ratingScore ? 'fill-amber-400 text-amber-500' : 'text-slate-300'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              <form onSubmit={handleRatingSubmit} className="space-y-3 text-xs text-left">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Feedback Comment:</label>
+                  <textarea
+                    rows={2}
+                    value={ratingComment}
+                    onChange={(e) => setRatingComment(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setRatingModalTicketId(null)}
+                    className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl font-bold shadow-xs"
+                  >
+                    Submit Rating
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* QR Scanner Modal */}
+        <QRScannerModal
+          isOpen={isQRModalOpen}
+          onClose={() => setIsQRModalOpen(false)}
+          onScanAsset={handleQRScanned}
+        />
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 2. MANAGEMENT & ADMIN EXECUTIVE OVERVIEW
+  // (Manager, Principal, Technician)
+  // ==========================================
   return (
     <div className="space-y-6">
       {/* MIT ACSC Maroon Hero Banner */}
       <div className="p-5 sm:p-8 bg-gradient-to-br from-maroon-800 via-maroon-900 to-maroon-950 text-white rounded-3xl shadow-xl shadow-maroon-950/15 relative overflow-hidden">
-        {/* Subtle decorative circles */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 text-white/90 border border-white/20 rounded-full text-[11px] font-semibold backdrop-blur-sm">
               <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-              <span>MIT ACSC Alandi • {selectedRole.toUpperCase()} PORTAL ACTIVE</span>
+              <span>MIT ACSC Alandi • {selectedRole.toUpperCase()} OPERATIONS SUITE</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
               Welcome back, {currentUser?.displayName?.split(' ')[0]} 👋
             </h2>
             <p className="text-xs sm:text-sm text-maroon-100 max-w-xl leading-relaxed">
-              {selectedRole === 'student'
-                ? 'Student Workspace • Quick Fault Reporting, 5s QR Barcode Scanner & Personal Ticket Tracking'
-                : selectedRole === 'teacher'
-                ? 'Faculty & Classroom Infrastructure • Priority Lecture Hall Escalations, Smart AV & Lab Diagnostics'
-                : selectedRole === 'employee'
+              {selectedRole === 'employee'
                 ? 'Technician Work Orders • SLA Deadline Triage, Replacement Parts Logging & PDF Work Orders'
                 : selectedRole === 'manager'
                 ? 'Estate Management Suite • Department Triage, CCTV Night LED Vision AI & Predictive Risk Engine'
@@ -76,24 +406,7 @@ export const DashboardOverview: React.FC = () => {
 
           {/* Clean Action Buttons tailored to role */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
-            {selectedRole === 'student' || selectedRole === 'teacher' ? (
-              <>
-                <button
-                  onClick={() => navigate('/report-fault')}
-                  className="px-5 py-3 bg-white hover:bg-slate-50 text-maroon-900 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition active:scale-95"
-                >
-                  <PlusCircle className="w-4 h-4 text-maroon-700 shrink-0" />
-                  <span>Report a Fault</span>
-                </button>
-                <button
-                  onClick={() => setIsQRModalOpen(true)}
-                  className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
-                >
-                  <QrCode className="w-4 h-4 shrink-0" />
-                  <span>5s QR Scan</span>
-                </button>
-              </>
-            ) : selectedRole === 'employee' ? (
+            {selectedRole === 'employee' ? (
               <>
                 <button
                   onClick={() => navigate('/assigned-tasks')}
@@ -106,7 +419,7 @@ export const DashboardOverview: React.FC = () => {
                   onClick={() => navigate('/portals')}
                   className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
                 >
-                  <span>Portals Gateway</span>
+                  <span>Portals Directory</span>
                 </button>
               </>
             ) : selectedRole === 'manager' ? (
@@ -345,36 +658,6 @@ export const DashboardOverview: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Multi-Role Portals Directory Banner */}
-      <div className="p-5 sm:p-6 bg-slate-900 text-white rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg border border-slate-800">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-maroon-800 flex items-center justify-center text-white shrink-0 shadow-md">
-            <Sparkles className="w-6 h-6 text-amber-300" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="font-extrabold text-sm sm:text-base text-white">
-                CampusCare Multi-Role Portal Directory
-              </h4>
-              <span className="px-2 py-0.5 bg-maroon-900 text-amber-300 text-[10px] font-mono font-bold rounded-md border border-maroon-700">
-                5 Dedicated Portals
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Access separated portals for Students, Faculty, Technicians, Estate Managers, and the Principal.
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={() => navigate('/portals')}
-          className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition active:scale-95 shrink-0"
-        >
-          <span>Open Portals Gateway</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
       </div>
 
       {/* QR Scanner Modal */}
