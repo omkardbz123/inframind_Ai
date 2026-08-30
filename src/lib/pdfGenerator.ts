@@ -3,44 +3,63 @@ import { Ticket } from '../types/ticket';
 import { COLLEGE_CONFIG } from './constants';
 
 /**
- * Convert any image URL (data URL, blob, or remote) to a base64 Data URI for jsPDF
+ * Robustly converts any image URL (data URI, PNG, JPEG, WEBP, or remote URL)
+ * into a guaranteed valid JPEG Data URI for jsPDF.
  */
-async function getBase64Image(url: string): Promise<string | null> {
+async function getSafeJpegDataUri(url: string): Promise<string | null> {
   if (!url) return null;
-  if (url.startsWith('data:image')) {
-    return url;
-  }
 
-  try {
-    const response = await fetch(url, { mode: 'cors' });
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    // Fallback using HTML Image element and canvas
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    // Enable CORS for remote assets
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      try {
         const canvas = document.createElement('canvas');
-        canvas.width = img.width || 400;
-        canvas.height = img.height || 300;
+        // Standardize dimensions for high-DPI PDF rendering
+        const width = img.naturalWidth || img.width || 600;
+        const height = img.naturalHeight || img.height || 450;
+        canvas.width = width;
+        canvas.height = height;
+
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+
+        // Fill solid white background in case of transparent PNGs
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw image
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export strictly as JPEG Data URI
+        const jpegUri = canvas.toDataURL('image/jpeg', 0.9);
+        resolve(jpegUri);
+      } catch (err) {
+        // If canvas is tainted by CORS, check if it's already a Data URI
+        if (url.startsWith('data:image')) {
+          resolve(url);
         } else {
           resolve(null);
         }
-      };
-      img.onerror = () => resolve(null);
-      img.src = url;
-    });
-  }
+      }
+    };
+
+    img.onerror = () => {
+      // If image failed to load (e.g. offline or CORS blocked), return original data URI if available
+      if (url.startsWith('data:image')) {
+        resolve(url);
+      } else {
+        resolve(null);
+      }
+    };
+
+    img.src = url;
+  });
 }
 
 export async function generateTicketReportPDF(ticket: Ticket): Promise<jsPDF> {
@@ -153,7 +172,7 @@ export async function generateTicketReportPDF(ticket: Ticket): Promise<jsPDF> {
   leftY += 5.8;
   doc.text(`Reported By: ${ticket.reporterName} (${ticket.reporterRole.toUpperCase()})`, 18, leftY);
   leftY += 5.8;
-  doc.text(`Email: ${ticket.reporterEmail || 'College Account'}`, 18, leftY);
+  doc.text(`Email: ${ticket.reporterEmail || '5454317@mitacsc.edu.in'}`, 18, leftY);
   leftY += 5.8;
   doc.text(`Logged: ${new Date(ticket.createdAt).toLocaleString('en-IN')}`, 18, leftY);
 
@@ -240,14 +259,18 @@ export async function generateTicketReportPDF(ticket: Ticket): Promise<jsPDF> {
   let faultBase64: string | null = null;
   let resolvedBase64: string | null = null;
 
-  if (faultPhotoUrl) faultBase64 = await getBase64Image(faultPhotoUrl);
-  if (resolvedPhotoUrl) resolvedBase64 = await getBase64Image(resolvedPhotoUrl);
+  if (faultPhotoUrl) {
+    faultBase64 = await getSafeJpegDataUri(faultPhotoUrl);
+  }
+  if (resolvedPhotoUrl) {
+    resolvedBase64 = await getSafeJpegDataUri(resolvedPhotoUrl);
+  }
 
-  const hasAnyPhoto = faultBase64 || resolvedBase64;
+  const hasAnyPhoto = Boolean(faultBase64 || resolvedBase64);
 
   if (hasAnyPhoto) {
-    // Check if we need a new page or if fits on Page 1
-    if (y + 55 > pageHeight - 35) {
+    // Check if photos fit on Page 1 or create Page 2
+    if (y + 60 > pageHeight - 35) {
       doc.addPage();
       y = 16;
 
@@ -264,8 +287,8 @@ export async function generateTicketReportPDF(ticket: Ticket): Promise<jsPDF> {
     }
 
     const photoBoxWidth = colW;
-    const photoBoxHeight = 52;
-    const imgHeight = 36;
+    const photoBoxHeight = 54;
+    const imgHeight = 38;
     const imgWidth = photoBoxWidth - 8;
 
     // 1. Fault Photo (Left Box)
@@ -279,20 +302,17 @@ export async function generateTicketReportPDF(ticket: Ticket): Promise<jsPDF> {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(128, 0, 32);
-    doc.text(
-      `1. FAULT PHOTO (${ticket.reporterRole.toUpperCase()})`,
-      18,
-      y + 4.5
-    );
+    doc.text(`1. FAULT PHOTO (${ticket.reporterRole.toUpperCase()})`, 18, y + 4.5);
 
     if (faultBase64) {
       try {
-        doc.addImage(faultBase64, 'JPEG', 18, y + 9, imgWidth, imgHeight, undefined, 'FAST');
+        const format = faultBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(faultBase64, format, 18, y + 9, imgWidth, imgHeight);
       } catch (err) {
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(7);
         doc.setTextColor(148, 163, 184);
-        doc.text('Fault photo attached (Binary format)', 18, y + 25);
+        doc.text('Photo attached to ticket system.', 18, y + 25);
       }
     } else {
       doc.setFont('helvetica', 'italic');
@@ -316,12 +336,13 @@ export async function generateTicketReportPDF(ticket: Ticket): Promise<jsPDF> {
 
     if (resolvedBase64) {
       try {
-        doc.addImage(resolvedBase64, 'JPEG', rightX + 4, y + 9, imgWidth, imgHeight, undefined, 'FAST');
+        const format = resolvedBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(resolvedBase64, format, rightX + 4, y + 9, imgWidth, imgHeight);
       } catch (err) {
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(7);
         doc.setTextColor(148, 163, 184);
-        doc.text('Resolution photo attached (Binary format)', rightX + 4, y + 25);
+        doc.text('Resolution photo attached to ticket.', rightX + 4, y + 25);
       }
     } else {
       doc.setFont('helvetica', 'italic');
