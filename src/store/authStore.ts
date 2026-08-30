@@ -60,31 +60,37 @@ export const useAuthStore = create<AuthState>((set, get) => {
       const localPart = email.split('@')[0];
       const emailDomain = email.split('@')[1]?.toLowerCase();
 
-      // Verify domain - allow mitacsc.edu.in, mitacsc.ac.in, and gmail.com
-      const isAllowedDomain =
-        !emailDomain ||
+      // Check if it's an official college email
+      const isCollegeDomain =
+        emailDomain === 'mitacsc.edu.in' ||
+        emailDomain === 'mitacsc.ac.in' ||
         COLLEGE_CONFIG.allowedDomains.some(
           (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
         );
-
-      if (!isAllowedDomain) {
-        const errMsg = `Access Restricted: "${email}" is not a recognized MIT ACSC account. Only verified college emails ending in @mitacsc.edu.in (or @mitacsc.ac.in) are permitted.`;
-        set({ authError: errMsg });
-        return { success: false, error: errMsg };
-      }
 
       // Check if matches known user in store or demo users
       const allUsers = useUserStore.getState().users;
       const matched = allUsers.find((u) => u.email.toLowerCase() === email);
 
+      // Strict Authorization Policy:
+      // 1. If email ends with @mitacsc.edu.in / @mitacsc.ac.in -> Always allowed for any user.
+      // 2. If it's a general email (e.g. @gmail.com) -> Allowed ONLY if registered as employee/staff in directory.
+      if (!isCollegeDomain) {
+        if (!matched) {
+          const errMsg = `Access Restricted: "${email}" is not an official MIT ACSC college email (@mitacsc.edu.in) and has not been registered as an authorized staff/technician in the system directory.`;
+          set({ authError: errMsg });
+          return { success: false, error: errMsg };
+        }
+      }
+
       const startsWithDigit = /^\d/.test(localPart);
 
       let determinedRole: UserRole = 'student';
-      if (forcedRole) {
-        determinedRole = forcedRole;
-      } else if (matched) {
+      if (matched) {
         determinedRole = matched.role;
-      } else if (startsWithDigit) {
+      } else if (forcedRole && isCollegeDomain) {
+        determinedRole = forcedRole;
+      } else if (startsWithDigit && isCollegeDomain) {
         determinedRole = 'student';
       } else {
         if (localPart.includes('admin') || localPart.includes('principal')) {
@@ -127,7 +133,13 @@ export const useAuthStore = create<AuthState>((set, get) => {
       const avatarUrl = photoURL || matched?.photoURL || defaultAvatar;
 
       const userProfile: UserProfile = matched
-        ? { ...matched, role: determinedRole, displayName: resolvedDisplayName, photoURL: avatarUrl }
+        ? {
+            ...matched,
+            role: determinedRole,
+            displayName: matched.displayName || resolvedDisplayName,
+            photoURL: avatarUrl,
+            lastLoginAt: new Date().toISOString(),
+          }
         : {
             uid: `user-${determinedRole}-${Date.now().toString(36)}`,
             email,

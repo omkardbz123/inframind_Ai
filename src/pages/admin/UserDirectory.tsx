@@ -85,8 +85,11 @@ export const UserDirectory: React.FC = () => {
     e.preventDefault();
 
     const trimmedEmail = formEmail.trim().toLowerCase();
-    if (!trimmedEmail.endsWith('@mitacsc.edu.in') && !trimmedEmail.endsWith('@mitacsc.ac.in')) {
-      alert('Email must end with @mitacsc.edu.in or @mitacsc.ac.in');
+    const isCollegeDomain =
+      trimmedEmail.endsWith('@mitacsc.edu.in') || trimmedEmail.endsWith('@mitacsc.ac.in');
+
+    if ((formRole === 'student' || formRole === 'teacher') && !isCollegeDomain) {
+      alert('Students and Faculty must use official college emails ending with @mitacsc.edu.in or @mitacsc.ac.in');
       return;
     }
 
