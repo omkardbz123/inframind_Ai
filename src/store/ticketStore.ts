@@ -111,8 +111,8 @@ const INITIAL_TICKETS: Ticket[] = [
     roomNumber: '213',
     locationDescription: 'Corridor water station opposite CAD Lab',
     reporterId: 'user-student-01',
-    reporterName: 'Omkar Sharma',
-    reporterEmail: 'omkar.student@college.edu',
+    reporterName: 'Omkar Bhujbal',
+    reporterEmail: '5454317@mitacsc.edu.in',
     reporterRole: 'Student (TE Comp)',
     assignedTo: 'user-plumber-01',
     assignedToName: 'Suresh Patil (Plumbing Tech)',
@@ -131,7 +131,7 @@ const INITIAL_TICKETS: Ticket[] = [
         action: 'created',
         toStatus: 'open',
         userId: 'user-student-01',
-        userName: 'Omkar Sharma',
+        userName: 'Omkar Bhujbal',
         comment: 'Fault ticket raised via Mobile PWA.',
         timestamp: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
       },
@@ -220,8 +220,8 @@ const INITIAL_TICKETS: Ticket[] = [
     roomNumber: '101',
     locationDescription: 'Classroom 101 Podium Ceiling Mount',
     reporterId: 'user-student-01',
-    reporterName: 'Omkar Sharma',
-    reporterEmail: 'omkar.student@college.edu',
+    reporterName: 'Omkar Bhujbal',
+    reporterEmail: '5454317@mitacsc.edu.in',
     reporterRole: 'Student',
     photoURLs: ['https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80'],
     createdAt: new Date(Date.now() - 1.5 * 3600 * 1000).toISOString(),
@@ -236,7 +236,7 @@ const INITIAL_TICKETS: Ticket[] = [
         action: 'created',
         toStatus: 'open',
         userId: 'user-student-01',
-        userName: 'Omkar Sharma',
+        userName: 'Omkar Bhujbal',
         comment: 'Reported via QR Code sticker scan on podium.',
         timestamp: new Date(Date.now() - 1.5 * 3600 * 1000).toISOString(),
       },
@@ -249,7 +249,17 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
   try {
     const saved = localStorage.getItem(STORAGE_TICKETS_KEY);
     if (saved) {
-      initialTickets = JSON.parse(saved);
+      const parsed: Ticket[] = JSON.parse(saved);
+      initialTickets = parsed.map((t) => {
+        if (t.reporterName === 'Omkar Sharma' || t.reporterEmail === 'omkar.student@college.edu') {
+          return {
+            ...t,
+            reporterName: 'Omkar Bhujbal',
+            reporterEmail: '5454317@mitacsc.edu.in',
+          };
+        }
+        return t;
+      });
     }
   } catch {
     initialTickets = INITIAL_TICKETS;

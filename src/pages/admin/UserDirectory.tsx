@@ -362,7 +362,7 @@ export const UserDirectory: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Er. Suresh Kadam (Supervisor) or Omkar Sharma"
+                  placeholder="e.g. Er. Suresh Kadam (Supervisor) or Omkar Bhujbal"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-maroon-700 font-medium"

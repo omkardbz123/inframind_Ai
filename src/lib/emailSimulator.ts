@@ -1,5 +1,6 @@
 import { Ticket } from '../types/ticket';
 import { COLLEGE_CONFIG } from './constants';
+import { generateTicketReportPDFDataUri } from './pdfGenerator';
 
 export interface SentEmailRecord {
   id: string;
@@ -253,27 +254,45 @@ export function sendTransactionalEmail(params: {
 
   saveSentEmail(record);
 
-  // Send live email via API
-  fetch('/api/send-email', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      to,
-      subject,
-      html: bodyHtml,
-    }),
-  })
-    .then((res) => res.json())
-    .then((data) => {
+  // Send live email via API with real attached PDF document
+  (async () => {
+    try {
+      const attachments: any[] = [];
+      if (hasPdfAttachment && ticket) {
+        try {
+          const pdfDataUri = await generateTicketReportPDFDataUri(ticket);
+          const base64Content = pdfDataUri.includes(',') ? pdfDataUri.split(',')[1] : pdfDataUri;
+          attachments.push({
+            filename: `MIT-ACSC-WorkOrder-${ticket.id}.pdf`,
+            content: base64Content,
+            encoding: 'base64',
+            contentType: 'application/pdf',
+          });
+        } catch (pdfErr) {
+          console.warn('[PDF Attachment Generation Notice]:', pdfErr);
+        }
+      }
+
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          subject,
+          html: bodyHtml,
+          attachments,
+        }),
+      });
+      const data = await res.json();
       if (data.success) {
         record.deliveryStatus = 'sent_live';
         record.backendMessage = `Delivered via Google SMTP: ${data.messageId}`;
         saveSentEmail(record);
       }
-    })
-    .catch(() => {
+    } catch {
       console.log('[Email Status]: Simulator mode active.');
-    });
+    }
+  })();
 
   return record;
 }
