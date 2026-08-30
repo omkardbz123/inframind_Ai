@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Sparkles,
   AlertTriangle,
@@ -6,20 +7,36 @@ import {
   Key,
   LogOut,
   Menu,
+  Users,
+  Layers,
+  ArrowRight,
+  GraduationCap,
+  UserCheck,
+  Wrench,
+  Briefcase,
+  Shield,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { COLLEGE_CONFIG } from '../../lib/constants';
-import { RoleSwitcherPill } from '../common/RoleSwitcherPill';
 import { EmergencySOSModal } from '../common/EmergencySOSModal';
 import { GeminiKeyModal } from '../common/GeminiKeyModal';
 import { EmailSentHistoryModal } from '../common/EmailSentHistoryModal';
 import { useTicketStore } from '../../store/ticketStore';
+
+const ROLE_ICON_MAP = {
+  student: GraduationCap,
+  teacher: UserCheck,
+  employee: Wrench,
+  manager: Briefcase,
+  admin: Shield,
+};
 
 interface TopBarProps {
   onToggleSidebar?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
+  const navigate = useNavigate();
   const { currentUser, selectedRole, logout, customGeminiApiKey } = useAuthStore();
   const { tickets } = useTicketStore();
 
@@ -30,6 +47,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
 
   const openTicketsCount = tickets.filter((t) => t.status === 'open' || t.status === 'assigned').length;
   const criticalCount = tickets.filter((t) => t.priority === 'critical' && t.status !== 'resolved').length;
+  const RoleIcon = ROLE_ICON_MAP[selectedRole] || GraduationCap;
 
   return (
     <>
@@ -44,9 +62,9 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-3 group">
               {/* MIT ACSC Maroon Logo */}
-              <div className="w-10 h-10 rounded-xl bg-maroon-800 flex items-center justify-center text-white shadow-md shadow-maroon-900/20 ring-2 ring-maroon-100 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-maroon-800 flex items-center justify-center text-white shadow-md shadow-maroon-900/20 ring-2 ring-maroon-100 shrink-0 group-hover:scale-105 transition">
                 <span className="font-serif font-black text-sm tracking-tighter">MIT</span>
               </div>
               <div>
@@ -62,16 +80,41 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                   Smart Infrastructure • CCTV AI Vision • Predictive Maintenance
                 </p>
               </div>
-            </div>
+            </Link>
           </div>
 
-          {/* Middle: Role Switcher */}
-          <div className="hidden lg:flex items-center">
-            <RoleSwitcherPill />
+          {/* Middle: Active Role Badge & Portals Directory Navigation */}
+          <div className="hidden lg:flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs">
+              <RoleIcon className="w-3.5 h-3.5 text-maroon-800" />
+              <span className="font-bold text-slate-900 capitalize">{selectedRole} Portal</span>
+              <span className="text-[10px] font-mono text-emerald-700 font-bold">● Active</span>
+            </div>
+
+            <Link
+              to="/portals"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 text-xs font-bold transition shadow-xs"
+              title="Open Multi-Role Portals Directory"
+            >
+              <Users className="w-3.5 h-3.5 text-maroon-800" />
+              <span>Portals Gateway</span>
+              <span className="px-1.5 py-0.2 bg-maroon-800 text-white text-[9px] rounded-full font-mono font-bold">
+                5 Roles
+              </span>
+            </Link>
           </div>
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2">
+            {/* Portals Gateway Link for Mobile/Tablet */}
+            <Link
+              to="/portals"
+              className="lg:hidden p-2 rounded-xl bg-maroon-50 text-maroon-800 border border-maroon-200 text-xs font-bold flex items-center gap-1"
+              title="Portals Gateway"
+            >
+              <Users className="w-4 h-4 text-maroon-800" />
+            </Link>
+
             {/* Gemini Key Config */}
             <button
               onClick={() => setIsGeminiKeyOpen(true)}
@@ -128,16 +171,30 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
               </button>
 
               {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-64 p-3 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 text-xs animate-in fade-in duration-150">
+                <div className="absolute right-0 mt-2 w-72 p-3 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 text-xs animate-in fade-in duration-150 space-y-3">
                   <div className="pb-3 border-b border-slate-100">
                     <div className="font-bold text-slate-900">{currentUser?.displayName}</div>
                     <div className="text-slate-500 font-mono text-[11px] truncate">{currentUser?.email}</div>
-                    <div className="mt-2 inline-flex items-center px-2 py-0.5 bg-maroon-50 text-maroon-800 border border-maroon-100 rounded text-[10px] font-bold uppercase">
-                      Role: {selectedRole}
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-maroon-50 text-maroon-800 border border-maroon-100 rounded-lg text-[10px] font-bold uppercase">
+                      <RoleIcon className="w-3 h-3 text-maroon-800" />
+                      <span>{selectedRole} Portal Active</span>
                     </div>
                   </div>
 
-                  <div className="py-2 space-y-1 text-slate-600">
+                  {/* Switch Portal Link */}
+                  <Link
+                    to="/portals"
+                    onClick={() => setShowProfileMenu(false)}
+                    className="w-full p-2.5 rounded-xl bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 flex items-center justify-between font-bold transition"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-maroon-800" />
+                      <span>Portals & Users Gateway</span>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-maroon-800" />
+                  </Link>
+
+                  <div className="py-1 space-y-1 text-slate-600">
                     <div className="flex justify-between py-1">
                       <span>Active Tickets:</span>
                       <span className="font-bold text-slate-900">{openTicketsCount}</span>
@@ -153,7 +210,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
                       setShowProfileMenu(false);
                       logout();
                     }}
-                    className="w-full mt-2 p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 flex items-center justify-center gap-2 font-semibold transition"
+                    className="w-full p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 flex items-center justify-center gap-2 font-semibold transition"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     Sign Out
@@ -162,11 +219,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
               )}
             </div>
           </div>
-        </div>
-
-        {/* Mobile Subheader with Role Selector */}
-        <div className="lg:hidden px-3 py-2 border-t border-slate-100 bg-slate-50 flex items-center justify-center">
-          <RoleSwitcherPill />
         </div>
       </header>
 

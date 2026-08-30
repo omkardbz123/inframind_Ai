@@ -56,32 +56,94 @@ export const DashboardOverview: React.FC = () => {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 text-white/90 border border-white/20 rounded-full text-[11px] font-semibold backdrop-blur-sm">
               <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-              <span>MIT ACSC Alandi • Smart Campus Management</span>
+              <span>MIT ACSC Alandi • {selectedRole.toUpperCase()} PORTAL ACTIVE</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
               Welcome back, {currentUser?.displayName?.split(' ')[0]} 👋
             </h2>
             <p className="text-xs sm:text-sm text-maroon-100 max-w-xl leading-relaxed">
-              {COLLEGE_CONFIG.name} Facilities System • AI Fault Reporting, CCTV Night LED Inspection & Predictive Maintenance
+              {selectedRole === 'student'
+                ? 'Student Workspace • Quick Fault Reporting, 5s QR Barcode Scanner & Personal Ticket Tracking'
+                : selectedRole === 'teacher'
+                ? 'Faculty & Classroom Infrastructure • Priority Lecture Hall Escalations, Smart AV & Lab Diagnostics'
+                : selectedRole === 'employee'
+                ? 'Technician Work Orders • SLA Deadline Triage, Replacement Parts Logging & PDF Work Orders'
+                : selectedRole === 'manager'
+                ? 'Estate Management Suite • Department Triage, CCTV Night LED Vision AI & Predictive Risk Engine'
+                : 'Executive Directorate Command • Campus Infrastructure Risk Radar, SLA BI Reports & Governance'}
             </p>
           </div>
 
-          {/* Clean Action Buttons */}
+          {/* Clean Action Buttons tailored to role */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
-            <button
-              onClick={() => navigate('/report-fault')}
-              className="px-5 py-3 bg-white hover:bg-slate-50 text-maroon-900 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition active:scale-95"
-            >
-              <PlusCircle className="w-4 h-4 text-maroon-700 shrink-0" />
-              <span>Report a Fault</span>
-            </button>
-            <button
-              onClick={() => setIsQRModalOpen(true)}
-              className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
-            >
-              <QrCode className="w-4 h-4 shrink-0" />
-              <span>5s QR Scan</span>
-            </button>
+            {selectedRole === 'student' || selectedRole === 'teacher' ? (
+              <>
+                <button
+                  onClick={() => navigate('/report-fault')}
+                  className="px-5 py-3 bg-white hover:bg-slate-50 text-maroon-900 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition active:scale-95"
+                >
+                  <PlusCircle className="w-4 h-4 text-maroon-700 shrink-0" />
+                  <span>Report a Fault</span>
+                </button>
+                <button
+                  onClick={() => setIsQRModalOpen(true)}
+                  className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+                >
+                  <QrCode className="w-4 h-4 shrink-0" />
+                  <span>5s QR Scan</span>
+                </button>
+              </>
+            ) : selectedRole === 'employee' ? (
+              <>
+                <button
+                  onClick={() => navigate('/assigned-tasks')}
+                  className="px-5 py-3 bg-white hover:bg-slate-50 text-maroon-900 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition active:scale-95"
+                >
+                  <Wrench className="w-4 h-4 text-maroon-700 shrink-0" />
+                  <span>My Assigned Tasks</span>
+                </button>
+                <button
+                  onClick={() => navigate('/portals')}
+                  className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+                >
+                  <span>Portals Gateway</span>
+                </button>
+              </>
+            ) : selectedRole === 'manager' ? (
+              <>
+                <button
+                  onClick={() => navigate('/ticket-queue')}
+                  className="px-5 py-3 bg-white hover:bg-slate-50 text-maroon-900 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition active:scale-95"
+                >
+                  <Layers className="w-4 h-4 text-maroon-700 shrink-0" />
+                  <span>Dispatch Queue</span>
+                </button>
+                <button
+                  onClick={() => navigate('/cctv-monitoring')}
+                  className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+                >
+                  <Video className="w-4 h-4 shrink-0" />
+                  <span>CCTV Vision AI</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => navigate('/analytics-reports')}
+                  className="px-5 py-3 bg-white hover:bg-slate-50 text-maroon-900 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition active:scale-95"
+                >
+                  <FileText className="w-4 h-4 text-maroon-700 shrink-0" />
+                  <span>Executive BI Reports</span>
+                </button>
+                <button
+                  onClick={() => navigate('/risk-map')}
+                  className="px-5 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+                >
+                  <MapPin className="w-4 h-4 shrink-0" />
+                  <span>Campus Risk Radar</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -283,6 +345,36 @@ export const DashboardOverview: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Multi-Role Portals Directory Banner */}
+      <div className="p-5 sm:p-6 bg-slate-900 text-white rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg border border-slate-800">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-maroon-800 flex items-center justify-center text-white shrink-0 shadow-md">
+            <Sparkles className="w-6 h-6 text-amber-300" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="font-extrabold text-sm sm:text-base text-white">
+                CampusCare Multi-Role Portal Directory
+              </h4>
+              <span className="px-2 py-0.5 bg-maroon-900 text-amber-300 text-[10px] font-mono font-bold rounded-md border border-maroon-700">
+                5 Dedicated Portals
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Access separated portals for Students, Faculty, Technicians, Estate Managers, and the Principal.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => navigate('/portals')}
+          className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition active:scale-95 shrink-0"
+        >
+          <span>Open Portals Gateway</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* QR Scanner Modal */}

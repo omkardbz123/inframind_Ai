@@ -42,6 +42,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       roles: ['admin', 'manager', 'employee', 'student', 'teacher'],
     },
     {
+      to: '/portals',
+      label: 'Portals Gateway',
+      icon: Users,
+      badge: '5 Roles',
+      badgeColor: 'bg-maroon-50 text-maroon-800 border-maroon-200',
+      roles: ['admin', 'manager', 'employee', 'student', 'teacher'],
+    },
+    {
       to: '/report-fault',
       label: 'Report Fault',
       icon: PlusCircle,
@@ -149,17 +157,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
 
       {/* Role Profile Info Card */}
       <div className="p-4 border-b border-slate-100 bg-slate-50/70">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-maroon-800 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
-            {currentUser?.displayName?.[0] || 'M'}
-          </div>
-          <div className="overflow-hidden">
-            <div className="font-bold text-xs text-slate-900 truncate">{currentUser?.displayName}</div>
-            <div className="text-[11px] text-maroon-800 font-semibold capitalize flex items-center gap-1.5 mt-0.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              {selectedRole} Portal
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 rounded-xl bg-maroon-800 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
+              {currentUser?.displayName?.[0] || 'M'}
+            </div>
+            <div className="overflow-hidden">
+              <div className="font-bold text-xs text-slate-900 truncate">{currentUser?.displayName}</div>
+              <div className="text-[11px] text-maroon-800 font-semibold capitalize flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                {selectedRole} Portal
+              </div>
             </div>
           </div>
+
+          <NavLink
+            to="/portals"
+            onClick={onClose}
+            className="px-2 py-1 bg-white hover:bg-maroon-50 text-maroon-800 border border-slate-200 hover:border-maroon-200 rounded-lg text-[10px] font-bold transition shrink-0"
+            title="Switch User Role / Portal"
+          >
+            Switch
+          </NavLink>
         </div>
       </div>
 

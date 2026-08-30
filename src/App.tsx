@@ -14,6 +14,7 @@ import { AssetRegistry } from './pages/admin/AssetRegistry';
 import { CampusRiskMap } from './pages/admin/CampusRiskMap';
 import { AnalyticsReports } from './pages/admin/AnalyticsReports';
 import { UserDirectory } from './pages/admin/UserDirectory';
+import { UserPortalsGateway } from './pages/shared/UserPortalsGateway';
 import { CCTVPhoneNodePage } from './pages/cctv/CCTVPhoneNodePage';
 
 export function App() {
@@ -49,6 +50,10 @@ export function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardOverview />} />
+            <Route path="/portals" element={<UserPortalsGateway />} />
+            <Route path="/roles" element={<UserPortalsGateway />} />
+            <Route path="/user-portals" element={<UserPortalsGateway />} />
+            <Route path="/user-gateway" element={<UserPortalsGateway />} />
             <Route path="/report-fault" element={<ReportFault />} />
             <Route path="/my-tickets" element={<MyTickets />} />
             <Route path="/assigned-tasks" element={<AssignedTasks />} />

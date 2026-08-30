@@ -292,6 +292,20 @@ export const LoginPage: React.FC = () => {
                 </div>
               </button>
             </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => navigate('/portals')}
+                className="w-full py-2.5 px-4 bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 rounded-xl text-xs font-bold transition flex items-center justify-between shadow-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-maroon-800" />
+                  <span>Explore Multi-Role Portals Directory</span>
+                </div>
+                <ArrowRight className="w-4 h-4 text-maroon-800" />
+              </button>
+            </div>
           </div>
         </div>
 
