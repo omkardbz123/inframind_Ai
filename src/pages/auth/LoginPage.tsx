@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Shield,
   Wrench,
@@ -16,6 +16,8 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
@@ -636,79 +638,16 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Demo Evaluator Access */}
-          <div className="pt-4 border-t border-slate-100 space-y-2.5">
-            <div className="text-center">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                — Fast 1-Click Evaluation Access —
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('student')}
-                className="p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
-              >
-                <img
-                  src="/avatars/user_5454317.png"
-                  alt="Omkar"
-                  className="w-5 h-5 rounded-full object-cover ring-1 ring-maroon-300 shrink-0"
-                />
-                <div className="truncate">
-                  <div className="font-bold text-slate-900">Student (Omkar)</div>
-                  <div className="text-[10px] text-slate-500 truncate">5454317@mitacsc.edu.in</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('teacher')}
-                className="p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
-              >
-                <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold text-slate-900">Teacher</div>
-                  <div className="text-[10px] text-slate-500 truncate">dr.deshpande@mitacsc.edu.in</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('employee')}
-                className="p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
-              >
-                <Wrench className="w-4 h-4 text-amber-600 shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold text-slate-900">Electrician</div>
-                  <div className="text-[10px] text-slate-500 truncate">Rajesh Kamble</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('manager')}
-                className="p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
-              >
-                <Briefcase className="w-4 h-4 text-purple-600 shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold text-slate-900">Facilities Manager</div>
-                  <div className="text-[10px] text-slate-500 truncate">Er. Ramesh Kulkarni</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('admin')}
-                className="col-span-2 p-2.5 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-left transition flex items-center gap-2"
-              >
-                <Shield className="w-4 h-4 text-maroon-800 shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold text-slate-900">Principal / Admin</div>
-                  <div className="text-[10px] text-slate-500 truncate">Dr. B. B. Waphare (Principal & Dean)</div>
-                </div>
-              </button>
-            </div>
+          {/* Link to Dedicated Quick Login Page */}
+          <div className="pt-3 border-t border-slate-100 text-center">
+            <Link
+              to="/quick_login"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-50 hover:bg-maroon-50 border border-slate-200 hover:border-maroon-200 text-xs text-slate-600 hover:text-maroon-800 transition font-semibold"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Fast 1-Click Evaluation Access?</span>
+              <span className="text-maroon-800 underline">Quick Login →</span>
+            </Link>
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
+import { QuickLoginPage } from './pages/auth/QuickLoginPage';
 import { DashboardOverview } from './pages/shared/DashboardOverview';
 import { ReportFault } from './pages/student/ReportFault';
 import { MyTickets } from './pages/student/MyTickets';
@@ -34,8 +35,11 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Auth Route */}
+        {/* Public Auth Routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/quick_login" element={<QuickLoginPage />} />
+        <Route path="/quick-login" element={<QuickLoginPage />} />
+        <Route path="/quicklogin" element={<QuickLoginPage />} />
 
         {/* Dedicated Smartphone CCTV Node Standalone Public Routes */}
         <Route path="/cctv-node" element={<CCTVPhoneNodePage />} />
