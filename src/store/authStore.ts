@@ -31,10 +31,23 @@ export const useAuthStore = create<AuthState>((set, get) => {
   try {
     const saved = localStorage.getItem(STORAGE_AUTH_KEY);
     if (saved) {
-      initialUser = JSON.parse(saved);
-      if (initialUser && initialUser.email === '5454317@mitacsc.edu.in') {
-        initialUser.photoURL = '/avatars/user_5454317.png';
-        initialUser.displayName = 'Omkar Bhujbal';
+      const parsed: UserProfile = JSON.parse(saved);
+      const email = parsed.email?.toLowerCase() || '';
+      const isCollege = email.endsWith('@mitacsc.edu.in') || email.endsWith('@mitacsc.ac.in');
+      const allUsers = useUserStore.getState().users;
+      const isRegisteredStaff = allUsers.some(
+        (u) => u.email.toLowerCase() === email && (u.role === 'employee' || u.role === 'manager' || u.role === 'admin')
+      );
+
+      if (isCollege || isRegisteredStaff) {
+        initialUser = parsed;
+        if (initialUser.email === '5454317@mitacsc.edu.in') {
+          initialUser.photoURL = '/avatars/user_5454317.png';
+          initialUser.displayName = 'Omkar Bhujbal';
+        }
+      } else {
+        localStorage.removeItem(STORAGE_AUTH_KEY);
+        initialUser = DEMO_USERS[0];
       }
     }
   } catch {
@@ -58,35 +71,28 @@ export const useAuthStore = create<AuthState>((set, get) => {
     ) => {
       const email = (inputEmail || '5454317@mitacsc.edu.in').trim().toLowerCase();
       const localPart = email.split('@')[0];
-      const emailDomain = email.split('@')[1]?.toLowerCase();
 
       // Check if it's an official college email
-      const isCollegeDomain =
-        emailDomain === 'mitacsc.edu.in' ||
-        emailDomain === 'mitacsc.ac.in' ||
-        COLLEGE_CONFIG.allowedDomains.some(
-          (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
-        );
+      const isCollegeDomain = email.endsWith('@mitacsc.edu.in') || email.endsWith('@mitacsc.ac.in');
 
-      // Check if matches known user in store or demo users
+      // Check if registered as staff in directory
       const allUsers = useUserStore.getState().users;
       const matched = allUsers.find((u) => u.email.toLowerCase() === email);
+      const isRegisteredStaff = matched && (matched.role === 'employee' || matched.role === 'manager' || matched.role === 'admin');
 
-      // Strict Authorization Policy:
-      // 1. If email ends with @mitacsc.edu.in / @mitacsc.ac.in -> Always allowed for any user.
-      // 2. If it's a general email (e.g. @gmail.com) -> Allowed ONLY if registered as employee/staff in directory.
-      if (!isCollegeDomain) {
-        if (!matched) {
-          const errMsg = `Access Restricted: "${email}" is not an official MIT ACSC college email (@mitacsc.edu.in) and has not been registered as an authorized staff/technician in the system directory.`;
-          set({ authError: errMsg });
-          return { success: false, error: errMsg };
-        }
+      // Strict Rejection Policy:
+      // 1. Official College emails (@mitacsc.edu.in / @mitacsc.ac.in) -> Allowed
+      // 2. External emails (@gmail.com, etc.) -> Allowed ONLY IF registered as authorized staff
+      if (!isCollegeDomain && !isRegisteredStaff) {
+        const errMsg = `Access Restricted: "${email}" is not an official MIT ACSC college account (@mitacsc.edu.in) and has not been registered as an authorized staff/technician by administration.`;
+        set({ authError: errMsg });
+        return { success: false, error: errMsg };
       }
 
       const startsWithDigit = /^\d/.test(localPart);
 
       let determinedRole: UserRole = 'student';
-      if (matched) {
+      if (isRegisteredStaff && matched) {
         determinedRole = matched.role;
       } else if (forcedRole && isCollegeDomain) {
         determinedRole = forcedRole;

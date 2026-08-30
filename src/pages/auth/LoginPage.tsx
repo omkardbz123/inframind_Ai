@@ -14,11 +14,12 @@ import {
   CheckCircle2,
   X,
   RefreshCw,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
 import { UserRole } from '../../types/user';
-import { COLLEGE_CONFIG } from '../../lib/constants';
 import { sendPasswordResetOtpEmail } from '../../lib/emailSimulator';
 
 declare global {
@@ -55,6 +56,7 @@ export const LoginPage: React.FC = () => {
 
   const [inputEmail, setInputEmail] = useState('');
   const [inputPassword, setInputPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isAuthenticatingWithGoogle, setIsAuthenticatingWithGoogle] = useState(false);
@@ -66,6 +68,8 @@ export const LoginPage: React.FC = () => {
   const [inputOtp, setInputOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
   const [resetError, setResetError] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
@@ -150,21 +154,19 @@ export const LoginPage: React.FC = () => {
     setLocalError('');
     clearAuthError();
 
-    const localPart = email.split('@')[0];
-    const emailDomain = email.split('@')[1]?.toLowerCase();
+    const normalizedEmail = email.toLowerCase().trim();
+    const localPart = normalizedEmail.split('@')[0];
     const isCollegeDomain =
-      emailDomain === 'mitacsc.edu.in' ||
-      emailDomain === 'mitacsc.ac.in' ||
-      COLLEGE_CONFIG.allowedDomains.some(
-        (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
-      );
+      normalizedEmail.endsWith('@mitacsc.edu.in') || normalizedEmail.endsWith('@mitacsc.ac.in');
 
-    const matched = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const matchedStaff = users.find(
+      (u) =>
+        u.email.toLowerCase() === normalizedEmail &&
+        (u.role === 'employee' || u.role === 'manager' || u.role === 'admin')
+    );
 
-    // Authorization Rule:
-    // 1. College email (@mitacsc.edu.in) -> Allowed
-    // 2. External email -> Allowed only if registered as employee/staff in directory
-    if (!isCollegeDomain && !matched) {
+    // Strict Rejection for Unauthorized External Accounts
+    if (!isCollegeDomain && !matchedStaff) {
       setIsAuthenticatingWithGoogle(false);
       setLocalError(
         `Access Restricted: External account "${email}" is not an official MIT ACSC college email (@mitacsc.edu.in) and has not been registered as an authorized staff/technician in the system directory.`
@@ -174,19 +176,19 @@ export const LoginPage: React.FC = () => {
 
     const startsWithDigit = /^\d/.test(localPart);
     let role: UserRole = 'student';
-    if (matched) {
-      role = matched.role;
+    if (matchedStaff) {
+      role = matchedStaff.role;
     } else if (startsWithDigit && isCollegeDomain) {
       role = 'student';
-    } else if (email.includes('admin') || email.includes('principal')) {
+    } else if (normalizedEmail.includes('admin') || normalizedEmail.includes('principal')) {
       role = 'admin';
-    } else if (email.includes('manager') || email.includes('estate')) {
+    } else if (normalizedEmail.includes('manager') || normalizedEmail.includes('estate')) {
       role = 'manager';
     } else if (
-      email.includes('electrician') ||
-      email.includes('plumber') ||
-      email.includes('tech') ||
-      email.includes('employee')
+      normalizedEmail.includes('electrician') ||
+      normalizedEmail.includes('plumber') ||
+      normalizedEmail.includes('tech') ||
+      normalizedEmail.includes('employee')
     ) {
       role = 'employee';
     } else {
@@ -194,9 +196,9 @@ export const LoginPage: React.FC = () => {
     }
 
     const finalAvatar =
-      picture || (email.startsWith('5454317') ? '/avatars/user_5454317.png' : undefined);
+      picture || (normalizedEmail.startsWith('5454317') ? '/avatars/user_5454317.png' : undefined);
 
-    const loginRes = await loginWithGoogle(email, name, role, finalAvatar);
+    const loginRes = await loginWithGoogle(normalizedEmail, name, role, finalAvatar);
 
     if (loginRes.success) {
       window.location.href = '/';
@@ -280,18 +282,17 @@ export const LoginPage: React.FC = () => {
     clearAuthError();
 
     const trimmedEmail = inputEmail.trim().toLowerCase();
-    const emailDomain = trimmedEmail.split('@')[1]?.toLowerCase();
     const isCollegeDomain =
-      emailDomain === 'mitacsc.edu.in' ||
-      emailDomain === 'mitacsc.ac.in' ||
-      COLLEGE_CONFIG.allowedDomains.some(
-        (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
-      );
+      trimmedEmail.endsWith('@mitacsc.edu.in') || trimmedEmail.endsWith('@mitacsc.ac.in');
 
-    const matched = users.find((u) => u.email.toLowerCase() === trimmedEmail);
+    const matchedStaff = users.find(
+      (u) =>
+        u.email.toLowerCase() === trimmedEmail &&
+        (u.role === 'employee' || u.role === 'manager' || u.role === 'admin')
+    );
 
     // Reject unregistered external emails
-    if (!isCollegeDomain && !matched) {
+    if (!isCollegeDomain && !matchedStaff) {
       setLocalError(
         `Access Restricted: "${trimmedEmail}" is not an official MIT ACSC college account (@mitacsc.edu.in) and has not been registered as an authorized staff/technician in the system directory.`
       );
@@ -313,8 +314,8 @@ export const LoginPage: React.FC = () => {
     const startsWithDigit = /^\d/.test(localPart);
 
     let role: UserRole = 'student';
-    if (matched) {
-      role = matched.role;
+    if (matchedStaff) {
+      role = matchedStaff.role;
     } else if (startsWithDigit && isCollegeDomain) {
       role = 'student';
     } else if (trimmedEmail.includes('admin') || trimmedEmail.includes('principal')) {
@@ -332,15 +333,16 @@ export const LoginPage: React.FC = () => {
       role = 'teacher';
     }
 
-    const userName = matched
-      ? matched.displayName
+    const matchedUser = users.find((u) => u.email.toLowerCase() === trimmedEmail);
+    const userName = matchedUser
+      ? matchedUser.displayName
       : startsWithDigit
       ? `Student ${localPart.toUpperCase()}`
       : `Prof. ${localPart.charAt(0).toUpperCase() + localPart.slice(1)}`;
 
     const avatar = trimmedEmail.startsWith('5454317')
       ? '/avatars/user_5454317.png'
-      : matched?.photoURL;
+      : matchedUser?.photoURL;
 
     const res = await loginWithGoogle(trimmedEmail, userName, role, avatar);
     if (res.success) {
@@ -370,19 +372,18 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const emailDomain = targetEmail.split('@')[1]?.toLowerCase();
     const isCollegeDomain =
-      emailDomain === 'mitacsc.edu.in' ||
-      emailDomain === 'mitacsc.ac.in' ||
-      COLLEGE_CONFIG.allowedDomains.some(
-        (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
-      );
+      targetEmail.endsWith('@mitacsc.edu.in') || targetEmail.endsWith('@mitacsc.ac.in');
 
-    const matched = users.find((u) => u.email.toLowerCase() === targetEmail);
+    const matchedStaff = users.find(
+      (u) =>
+        u.email.toLowerCase() === targetEmail &&
+        (u.role === 'employee' || u.role === 'manager' || u.role === 'admin')
+    );
 
-    if (!isCollegeDomain && !matched) {
+    if (!isCollegeDomain && !matchedStaff) {
       setResetError(
-        `Access Restricted: "${targetEmail}" is not a recognized college email and is not registered in the staff directory.`
+        `Access Restricted: "${targetEmail}" is not a recognized college email (@mitacsc.edu.in) and is not registered in the staff directory.`
       );
       return;
     }
@@ -583,7 +584,7 @@ export const LoginPage: React.FC = () => {
               <input
                 type="email"
                 required
-                placeholder="e.g. 5454317@mitacsc.edu.in or sbkhole@mitacsc.edu.in"
+                placeholder="e.g. 5454317@mitacsc.edu.in or dr.deshpande@mitacsc.edu.in"
                 value={inputEmail}
                 onChange={(e) => setInputEmail(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium text-xs"
@@ -605,14 +606,24 @@ export const LoginPage: React.FC = () => {
                 </button>
               </div>
 
-              <input
-                type="password"
-                required
-                placeholder="Enter account password (default: mitacsc@123)"
-                value={inputPassword}
-                onChange={(e) => setInputPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium text-xs"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  placeholder="Enter account password (default: mitacsc@123)"
+                  value={inputPassword}
+                  onChange={(e) => setInputPassword(e.target.value)}
+                  className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 transition"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -800,26 +811,46 @@ export const LoginPage: React.FC = () => {
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1.5">New Password:</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Enter new password (min. 6 characters)"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Enter new password (min. 6 characters)"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 transition"
+                      title={showNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1.5">Confirm New Password:</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Re-enter new password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 transition"
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex justify-between items-center pt-2">

@@ -266,18 +266,6 @@ export const DEMO_USERS: UserProfile[] = [
     lastLoginAt: new Date().toISOString(),
   },
   {
-    uid: 'user-staff-omkar-gmail',
-    email: 'omkardbz123@gmail.com',
-    displayName: 'Omkar Bhujbal (Smart Systems Specialist)',
-    role: 'employee',
-    department: 'technical',
-    employeeId: 'EMP-SPEC-089',
-    phone: '+91 98220 00123',
-    isActive: true,
-    createdAt: '2024-01-15T08:00:00Z',
-    lastLoginAt: new Date().toISOString(),
-  },
-  {
     uid: 'user-manager-01',
     email: 'ramesh.manager@mitacsc.edu.in',
     displayName: 'Er. Ramesh Kulkarni (Facilities Manager)',
