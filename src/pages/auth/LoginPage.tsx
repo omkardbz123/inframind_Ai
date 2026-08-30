@@ -10,9 +10,6 @@ import {
   Lock,
   Mail,
   AlertCircle,
-  Building,
-  Smartphone,
-  Video,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { UserRole } from '../../types/user';
@@ -55,11 +52,23 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  const handleGoogleOneClick = async () => {
+    setLocalError('');
+    clearAuthError();
+
+    const defaultEmail =
+      activeTab === 'student' ? '5454317@mitacsc.edu.in' : 'dr.deshpande@mitacsc.edu.in';
+    const defaultName =
+      activeTab === 'student' ? 'Omkar (TY B.Sc CS)' : 'Dr. Rajiv Deshpande (Prof. CS)';
+
+    const res = await loginWithGoogle(defaultEmail, defaultName, activeTab);
+    if (res.success) {
+      navigate('/');
+    }
+  };
+
   const handleQuickDemoLogin = async (role: UserRole) => {
-    const demoAccounts: Record<
-      UserRole,
-      { email: string; name: string }
-    > = {
+    const demoAccounts: Record<UserRole, { email: string; name: string }> = {
       student: {
         email: '5454317@mitacsc.edu.in',
         name: 'Omkar (TY B.Sc CS)',
@@ -110,27 +119,6 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
         </div>
-
-        {/* Turn Phone into CCTV Banner */}
-        <a
-          href="/cctv-node"
-          className="p-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-2xl font-bold flex items-center justify-between shadow-lg shadow-amber-900/30 transition transform hover:-translate-y-0.5 active:scale-98"
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center shrink-0">
-              <Smartphone className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-black uppercase tracking-tight">
-                Turn this Phone into a CCTV Node
-              </div>
-              <div className="text-[10px] text-slate-900/80 font-medium">
-                Stream live camera to PC CCTV Control Room (No Login Needed)
-              </div>
-            </div>
-          </div>
-          <ArrowRight className="w-4 h-4 shrink-0" />
-        </a>
 
         {/* Main Login Card */}
         <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-7 shadow-2xl border border-white/20 space-y-5">
@@ -187,6 +175,43 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
+          {/* Google Sign-In Primary Button */}
+          <button
+            type="button"
+            onClick={handleGoogleOneClick}
+            className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-2xl font-bold text-xs flex items-center justify-center gap-3 shadow-xs hover:shadow-md transition active:scale-98"
+          >
+            {/* Google SVG G-Icon */}
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+              <path
+                fill="#4285F4"
+                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+              />
+            </svg>
+            <span>Sign in with Google Workspace (@mitacsc.edu.in)</span>
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Or Enter College Email
+            </span>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+
           {/* Email Input Form */}
           <form onSubmit={handleDomainLogin} className="space-y-4">
             <div>
@@ -204,7 +229,7 @@ export const LoginPage: React.FC = () => {
                   }
                   className="text-[11px] text-maroon-800 font-semibold hover:underline"
                 >
-                  Fill Sample: {activeTab === 'student' ? '5454317@mitacsc.edu.in' : 'dr.deshpande@mitacsc.edu.in'}
+                  Fill Sample
                 </button>
               </div>
 
@@ -217,7 +242,7 @@ export const LoginPage: React.FC = () => {
                   }
                   value={inputEmail}
                   onChange={(e) => setInputEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium text-xs"
                 />
               </div>
               <p className="text-[10px] text-slate-400 mt-1">
@@ -227,7 +252,7 @@ export const LoginPage: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full py-3 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs transition"
+              className="w-full py-3 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs transition active:scale-98 text-xs"
             >
               <Lock className="w-4 h-4" />
               <span>Enter {activeTab === 'student' ? 'Student' : 'Teacher'} Portal</span>
@@ -235,8 +260,8 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Demo Evaluator Drawer */}
-          <div className="pt-4 border-t border-slate-100 space-y-3">
+          {/* Quick Demo Evaluator Access */}
+          <div className="pt-4 border-t border-slate-100 space-y-2.5">
             <div className="text-center">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 — Fast 1-Click Evaluation Access —
@@ -290,20 +315,6 @@ export const LoginPage: React.FC = () => {
                   <div className="font-bold text-slate-900">Principal / Admin</div>
                   <div className="text-[10px] text-slate-500 truncate">Dr. B. B. Waphare</div>
                 </div>
-              </button>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => navigate('/portals')}
-                className="w-full py-2.5 px-4 bg-maroon-50 hover:bg-maroon-100 text-maroon-900 border border-maroon-200 rounded-xl text-xs font-bold transition flex items-center justify-between shadow-xs"
-              >
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-maroon-800" />
-                  <span>Explore Multi-Role Portals Directory</span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-maroon-800" />
               </button>
             </div>
           </div>
