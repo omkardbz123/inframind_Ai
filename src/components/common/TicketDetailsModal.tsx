@@ -320,23 +320,52 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({
       {/* Full-screen Photo Zoom Modal */}
       {selectedZoomPhoto && (
         <div
-          className="fixed inset-0 z-60 bg-slate-950/90 flex flex-col items-center justify-center p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150"
           onClick={() => setSelectedZoomPhoto(null)}
         >
-          <div className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl shadow-2xl border border-white/20">
-            <button
-              onClick={() => setSelectedZoomPhoto(null)}
-              className="absolute top-3 right-3 p-2 bg-slate-900/80 text-white rounded-full hover:bg-slate-900 transition z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img
-              src={selectedZoomPhoto}
-              alt="Enlarged fault photo"
-              className="w-full h-full object-contain max-h-[80vh]"
-            />
+          <div
+            className="relative w-full max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-white/20 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Zoom Header */}
+            <div className="px-5 py-3.5 bg-slate-950/80 border-b border-white/10 flex items-center justify-between text-white">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-maroon-400" />
+                <span className="font-bold text-xs">Fault / Resolution Evidence Inspection</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={selectedZoomPhoto}
+                  download={`Evidence-${ticket.id}.jpg`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold flex items-center gap-1 transition"
+                  title="Open Original Image"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="text-[11px] hidden sm:inline">Open Full Size</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSelectedZoomPhoto(null)}
+                  className="p-1.5 bg-white/10 hover:bg-rose-600 rounded-xl text-white transition"
+                  title="Close Preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Enlarged Image */}
+            <div className="p-3 sm:p-6 flex items-center justify-center overflow-auto max-h-[78vh] bg-slate-950">
+              <img
+                src={selectedZoomPhoto}
+                alt="Enlarged fault photo"
+                className="max-h-[72vh] w-auto max-w-full object-contain rounded-xl shadow-lg border border-white/10"
+              />
+            </div>
           </div>
-          <p className="text-xs text-white/70 mt-3 font-mono">Click anywhere to close full preview</p>
+          <p className="text-[11px] text-white/60 mt-3 font-mono">Press anywhere outside or click (×) to return</p>
         </div>
       )}
     </>
