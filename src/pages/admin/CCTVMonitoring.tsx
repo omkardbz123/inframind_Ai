@@ -96,42 +96,56 @@ export const CCTVMonitoring: React.FC = () => {
     };
   }, [registerPhoneNode, selectCamera]);
 
-  // Subscribe to High-Speed 24-30 FPS Real-Time Frames
+  // Subscribe to High-Speed 24-30 FPS Real-Time Frames across all channels
   useEffect(() => {
     let frameTimes: number[] = [];
     latestFrameDataRef.current = selectedCam.currentSnapshotURL;
 
-    // Draw initial snapshot to canvas if available
-    const initImg = new Image();
-    initImg.onload = () => {
-      if (liveCanvasRef.current && !hasRemoteWebRtcStream) {
-        const canvas = liveCanvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          canvas.width = initImg.width || 640;
-          canvas.height = initImg.height || 360;
-          ctx.drawImage(initImg, 0, 0, canvas.width, canvas.height);
+    // Draw initial / current snapshot to canvas
+    const drawSnapshot = (url: string) => {
+      if (!liveCanvasRef.current) return;
+      const img = new Image();
+      img.onload = () => {
+        if (liveCanvasRef.current) {
+          const canvas = liveCanvasRef.current;
+          const ctx = canvas.getContext('2d', { alpha: false });
+          if (ctx) {
+            if (canvas.width !== (img.width || 640) || canvas.height !== (img.height || 360)) {
+              canvas.width = img.width || 640;
+              canvas.height = img.height || 360;
+            }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          }
         }
-      }
+      };
+      img.src = url;
     };
-    initImg.src = selectedCam.currentSnapshotURL;
 
-    const unsubscribe = cctvStreamService.subscribeToCamera(
-      selectedCam.id,
-      (payload: LiveFramePayload) => {
+    if (selectedCam.currentSnapshotURL) {
+      drawSnapshot(selectedCam.currentSnapshotURL);
+    }
+
+    // Subscribe to all incoming frames (from WebRTC DataChannel, BroadcastChannel, and local loop)
+    const unsubscribeAll = cctvStreamService.subscribeToAllFrames((payload: LiveFramePayload) => {
+      // If the incoming frame belongs to current selected camera OR if current camera is a phone node
+      const isTargetCam =
+        payload.cameraId === selectedCam.id ||
+        (selectedCam.isPhoneNode && payload.cameraId.includes('PHONE'));
+
+      if (isTargetCam) {
         latestFrameDataRef.current = payload.frameDataUrl;
 
-        // Render immediately onto hardware-accelerated canvas
-        if (liveCanvasRef.current && !hasRemoteWebRtcStream) {
+        // Render directly onto canvas
+        if (liveCanvasRef.current && !(selectedCam.isPhoneNode && hasRemoteWebRtcStream)) {
           const img = new Image();
           img.onload = () => {
             if (liveCanvasRef.current) {
               const canvas = liveCanvasRef.current;
               const ctx = canvas.getContext('2d', { alpha: false });
               if (ctx) {
-                if (canvas.width !== img.width || canvas.height !== img.height) {
-                  canvas.width = img.width || 640;
-                  canvas.height = img.height || 360;
+                if (canvas.width !== 640 || canvas.height !== 360) {
+                  canvas.width = 640;
+                  canvas.height = 360;
                 }
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
               }
@@ -142,7 +156,7 @@ export const CCTVMonitoring: React.FC = () => {
 
         // Calculate Real-Time Latency and FPS
         const now = Date.now();
-        const latency = Math.max(8, Math.min(80, now - payload.timestamp));
+        const latency = Math.max(6, Math.min(80, now - payload.timestamp));
         setLiveLatencyMs(latency);
 
         frameTimes.push(now);
@@ -155,12 +169,12 @@ export const CCTVMonitoring: React.FC = () => {
           }
         }
       }
-    );
+    });
 
     return () => {
-      unsubscribe();
+      unsubscribeAll();
     };
-  }, [selectedCam.id, hasRemoteWebRtcStream]);
+  }, [selectedCam.id, selectedCam.currentSnapshotURL, selectedCam.isPhoneNode, hasRemoteWebRtcStream]);
 
   // Live timer tick for on-screen CCTV clock
   useEffect(() => {
@@ -498,6 +512,29 @@ export const CCTVMonitoring: React.FC = () => {
                 </div>
               </div>
 
+              {/* Live Phone Node Detection Alert Banner */}
+              {cameras.some((c) => c.isPhoneNode && c.isLiveStreaming) && !selectedCam.isPhoneNode && (
+                <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-300 rounded-2xl flex items-center justify-between gap-3 text-xs animate-in slide-in-from-top duration-150 shadow-xs">
+                  <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                    </span>
+                    <span>📱 Smartphone Camera Node is actively streaming live motion!</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const phoneCam = cameras.find((c) => c.isPhoneNode);
+                      if (phoneCam) selectCamera(phoneCam.id);
+                    }}
+                    className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow-xs transition active:scale-95 flex items-center gap-1"
+                  >
+                    <span>▶ Switch to Phone Stream</span>
+                  </button>
+                </div>
+              )}
+
               {/* Viewport: Live Stream Mode */}
               {viewMode === 'live_stream' ? (
                 <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border border-slate-800 select-none group">
@@ -507,13 +544,17 @@ export const CCTVMonitoring: React.FC = () => {
                     autoPlay
                     playsInline
                     muted
-                    className={`w-full h-full object-cover ${hasRemoteWebRtcStream ? 'block' : 'hidden'}`}
+                    className={`w-full h-full object-cover ${
+                      selectedCam.isPhoneNode && hasRemoteWebRtcStream ? 'block' : 'hidden'
+                    }`}
                   />
 
                   {/* High-Speed Hardware Accelerated Canvas for 24-30 FPS Live Stream */}
                   <canvas
                     ref={liveCanvasRef}
-                    className={`w-full h-full object-cover ${hasRemoteWebRtcStream ? 'hidden' : 'block'}`}
+                    className={`w-full h-full object-cover ${
+                      selectedCam.isPhoneNode && hasRemoteWebRtcStream ? 'hidden' : 'block'
+                    }`}
                   />
 
                   {/* High Tech HUD Overlay */}

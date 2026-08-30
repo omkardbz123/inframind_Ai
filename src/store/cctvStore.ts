@@ -165,7 +165,7 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
     }
   };
 
-  // Listen for broadcast sync messages
+  // 1. Listen for broadcast sync messages
   if (syncChannel) {
     syncChannel.onmessage = (event) => {
       const { type, payload } = event.data || {};
@@ -185,6 +185,18 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
         set({ activeElectricityGrid: payload.gridActive });
       }
     };
+  }
+
+  // 2. Listen for Cross-Window / Multi-Tab localStorage changes
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (event) => {
+      if (event.key === STORAGE_CCTV_KEY && event.newValue) {
+        try {
+          const freshCameras: CCTVCamera[] = JSON.parse(event.newValue);
+          set({ cameras: freshCameras });
+        } catch {}
+      }
+    });
   }
 
   return {
@@ -259,8 +271,11 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
 
     updatePhoneHeartbeat: (cameraId, snapshotBase64, battery, torch) => {
       const state = get();
+      let found = false;
+
       const updated = state.cameras.map((c) => {
         if (c.id === cameraId) {
+          found = true;
           return {
             ...c,
             currentSnapshotURL: snapshotBase64 || c.currentSnapshotURL,
@@ -275,8 +290,35 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
         return c;
       });
 
-      set({ cameras: updated });
-      persist(updated);
+      // If not yet registered, auto-add to cameras list
+      let finalCameras = updated;
+      if (!found) {
+        const autoAdded: CCTVCamera = {
+          id: cameraId,
+          name: `📱 Live Smartphone (${cameraId})`,
+          building: 'Main Academic Building (MAB)',
+          floor: 1,
+          wing: 'east',
+          areaDescription: 'Classroom / Corridor Light Sensor',
+          referenceImageURL: REF_CORRIDOR_ON,
+          referenceImageTimestamp: new Date().toISOString(),
+          currentSnapshotURL: snapshotBase64 || CURRENT_CORRIDOR_OK,
+          currentSnapshotTimestamp: new Date().toISOString(),
+          isActive: true,
+          isPhoneNode: true,
+          isLiveStreaming: true,
+          deviceBattery: battery ?? 90,
+          lastHeartbeat: new Date().toISOString(),
+          lastAnalysisResult: 'all_ok',
+          consecutiveFailures: 0,
+          electricityGridActive: state.activeElectricityGrid,
+          snapshots: [],
+        };
+        finalCameras = [autoAdded, ...state.cameras];
+      }
+
+      set({ cameras: finalCameras });
+      persist(finalCameras);
 
       if (syncChannel) {
         syncChannel.postMessage({
@@ -287,6 +329,7 @@ export const useCCTVStore = create<CCTVStoreState>((set, get) => {
             deviceBattery: battery,
             torchOn: torch,
             lastHeartbeat: new Date().toISOString(),
+            isLiveStreaming: true,
           },
         });
       }

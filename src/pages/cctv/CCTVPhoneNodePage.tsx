@@ -258,8 +258,8 @@ export const CCTVPhoneNodePage: React.FC = () => {
             setFrameCount((prev) => prev + 1);
             setLastFrameTime(new Date().toLocaleTimeString());
 
-            // Throttle store persist to avoid disk wear
-            if (seqRef.current % 40 === 0) {
+            // Persist heartbeat immediately on first frame, then every 15 frames (~500ms)
+            if (seqRef.current === 1 || seqRef.current % 15 === 0) {
               updatePhoneHeartbeat(nodeId, frameDataUrl, batteryLevel, torchOn);
             }
           }

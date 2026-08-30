@@ -18,6 +18,16 @@ export interface LiveFramePayload {
 
 export const DEFAULT_HUB_ID = 'mit-acsc-cctv-control-room-v1';
 
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:stun.services.mozilla.com' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+];
+
 type StreamCallback = (stream: MediaStream, cameraId: string) => void;
 type FrameListener = (payload: LiveFramePayload) => void;
 
@@ -34,17 +44,22 @@ class CCTVStreamService {
   private lastFrameTimes: Map<string, number[]> = new Map();
   private isHubInitialized = false;
   private isNodeInitialized = false;
+  private currentHubId = DEFAULT_HUB_ID;
 
   constructor() {
-    // 1. Local same-device BroadcastChannel fallback
+    // 1. Local same-device / cross-tab BroadcastChannel fallback
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      this.channel = new BroadcastChannel('campuscare_cctv_live_stream_v2');
-      this.channel.onmessage = (event) => {
-        const payload: LiveFramePayload = event.data;
-        if (!payload || !payload.cameraId) return;
-        this.calculateFps(payload.cameraId, payload.timestamp);
-        this.dispatchFrameLocally(payload);
-      };
+      try {
+        this.channel = new BroadcastChannel('campuscare_cctv_live_stream_v2');
+        this.channel.onmessage = (event) => {
+          const payload: LiveFramePayload = event.data;
+          if (!payload || !payload.cameraId) return;
+          this.calculateFps(payload.cameraId, payload.timestamp);
+          this.dispatchFrameLocally(payload);
+        };
+      } catch (e) {
+        console.warn('BroadcastChannel not supported:', e);
+      }
     }
   }
 
@@ -53,7 +68,9 @@ class CCTVStreamService {
    */
   public initHub(hubId: string = DEFAULT_HUB_ID, onStreamReceived?: StreamCallback): Promise<string> {
     return new Promise((resolve) => {
-      if (this.peer && this.isHubInitialized) {
+      this.currentHubId = hubId;
+
+      if (this.peer && this.isHubInitialized && !this.peer.destroyed) {
         if (onStreamReceived) this.streamListeners.add(onStreamReceived);
         resolve(this.peer.id);
         return;
@@ -61,57 +78,56 @@ class CCTVStreamService {
 
       this.cleanup();
 
-      const peer = new Peer(hubId, {
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-          ],
-        },
-      });
-
-      this.peer = peer;
-      this.isHubInitialized = true;
-      if (onStreamReceived) this.streamListeners.add(onStreamReceived);
-
-      peer.on('open', (id) => {
-        console.log('✅ WebRTC CCTV Control Room Hub Online:', id);
-        resolve(id);
-      });
-
-      peer.on('call', (call) => {
-        console.log('📞 Incoming WebRTC Phone Camera Call from:', call.peer);
-        call.answer(); // Answer without outgoing stream
-
-        call.on('stream', (remoteStream) => {
-          console.log('🎥 WebRTC Remote MediaStream Received from:', call.peer);
-          this.streamListeners.forEach((cb) => cb(remoteStream, call.peer));
+      try {
+        const peer = new Peer(hubId, {
+          config: { iceServers: ICE_SERVERS },
+          debug: 1,
         });
 
-        this.activeCalls.set(call.peer, call);
-      });
+        this.peer = peer;
+        this.isHubInitialized = true;
+        if (onStreamReceived) this.streamListeners.add(onStreamReceived);
 
-      peer.on('connection', (conn) => {
-        console.log('🔗 DataConnection established with:', conn.peer);
-        conn.on('data', (data: any) => {
-          if (data && data.type === 'FRAME_DATA') {
-            const payload: LiveFramePayload = data.payload;
-            this.calculateFps(payload.cameraId, payload.timestamp);
-            this.dispatchFrameLocally(payload);
+        peer.on('open', (id) => {
+          console.log('✅ WebRTC CCTV Control Room Hub Online:', id);
+          resolve(id);
+        });
+
+        peer.on('call', (call) => {
+          console.log('📞 Incoming WebRTC Phone Camera Call from:', call.peer);
+          call.answer(); // Answer without sending return video
+
+          call.on('stream', (remoteStream) => {
+            console.log('🎥 WebRTC Remote MediaStream Received from:', call.peer);
+            this.streamListeners.forEach((cb) => cb(remoteStream, call.peer));
+          });
+
+          this.activeCalls.set(call.peer, call);
+        });
+
+        peer.on('connection', (conn) => {
+          console.log('🔗 High-Speed DataConnection established with:', conn.peer);
+          conn.on('data', (data: any) => {
+            if (data && data.type === 'FRAME_DATA') {
+              const payload: LiveFramePayload = data.payload;
+              this.calculateFps(payload.cameraId, payload.timestamp);
+              this.dispatchFrameLocally(payload);
+            }
+          });
+          this.activeDataConns.set(conn.peer, conn);
+        });
+
+        peer.on('error', (err) => {
+          console.warn('WebRTC Hub Notice:', err.type, err.message);
+          if (err.type === 'unavailable-id') {
+            const altId = `mit-acsc-hub-${Math.floor(1000 + Math.random() * 9000)}`;
+            this.initHub(altId, onStreamReceived).then(resolve);
           }
         });
-        this.activeDataConns.set(conn.peer, conn);
-      });
-
-      peer.on('error', (err) => {
-        console.warn('WebRTC Hub Notice:', err.type, err.message);
-        // If ID is taken (e.g. previous tab), create unique fallback ID
-        if (err.type === 'unavailable-id') {
-          const altId = `mit-acsc-hub-${Math.floor(1000 + Math.random() * 9000)}`;
-          this.initHub(altId, onStreamReceived).then(resolve);
-        }
-      });
+      } catch (err) {
+        console.warn('PeerJS initHub error:', err);
+        resolve(hubId);
+      }
     });
   }
 
@@ -122,38 +138,39 @@ class CCTVStreamService {
     return new Promise((resolve) => {
       this.cleanup();
       this.localStream = localMediaStream;
+      this.currentHubId = hubId;
 
-      const peer = new Peer(nodeId, {
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-          ],
-        },
-      });
+      try {
+        const peer = new Peer(nodeId, {
+          config: { iceServers: ICE_SERVERS },
+          debug: 1,
+        });
 
-      this.peer = peer;
-      this.isNodeInitialized = true;
+        this.peer = peer;
+        this.isNodeInitialized = true;
 
-      peer.on('open', (id) => {
-        console.log('📱 Phone CCTV Node WebRTC Online:', id);
-        this.connectAndCallHub(hubId, localMediaStream);
-        resolve(true);
-      });
+        peer.on('open', (id) => {
+          console.log('📱 Phone CCTV Node WebRTC Online:', id);
+          this.connectAndCallHub(hubId, localMediaStream);
+          resolve(true);
+        });
 
-      peer.on('error', (err) => {
-        console.warn('Phone WebRTC Notice:', err.type, err.message);
-        if (err.type === 'unavailable-id') {
-          const randNodeId = `${nodeId}-${Math.floor(100 + Math.random() * 900)}`;
-          this.initPhoneNode(randNodeId, localMediaStream, hubId).then(resolve);
-        }
-      });
+        peer.on('error', (err) => {
+          console.warn('Phone WebRTC Notice:', err.type, err.message);
+          if (err.type === 'unavailable-id') {
+            const randNodeId = `${nodeId}-${Math.floor(100 + Math.random() * 900)}`;
+            this.initPhoneNode(randNodeId, localMediaStream, hubId).then(resolve);
+          }
+        });
+      } catch (err) {
+        console.warn('PeerJS initPhoneNode error:', err);
+        resolve(false);
+      }
     });
   }
 
   private connectAndCallHub(hubId: string, stream: MediaStream) {
-    if (!this.peer) return;
+    if (!this.peer || this.peer.destroyed) return;
 
     try {
       // 1. Establish WebRTC MediaStream Call
@@ -161,17 +178,27 @@ class CCTVStreamService {
       if (call) {
         this.activeCalls.set(hubId, call);
         call.on('close', () => {
-          console.log('Call to Hub closed, attempting reconnect in 3s...');
-          setTimeout(() => this.connectAndCallHub(hubId, stream), 3000);
+          console.log('Call to Hub closed, attempting reconnect in 2s...');
+          setTimeout(() => this.connectAndCallHub(hubId, stream), 2000);
         });
       }
 
       // 2. Establish WebRTC Data Channel
-      const conn = this.peer.connect(hubId);
+      const conn = this.peer.connect(hubId, { reliable: false });
       if (conn) {
         conn.on('open', () => {
           console.log('⚡ High-speed WebRTC data channel connected to Hub');
           this.activeDataConns.set(hubId, conn);
+        });
+        conn.on('close', () => {
+          setTimeout(() => {
+            if (this.peer && !this.peer.destroyed) {
+              const retryConn = this.peer.connect(hubId, { reliable: false });
+              if (retryConn) {
+                retryConn.on('open', () => this.activeDataConns.set(hubId, retryConn));
+              }
+            }
+          }, 2000);
         });
       }
     } catch (e) {
@@ -180,24 +207,27 @@ class CCTVStreamService {
   }
 
   /**
-   * Broadcast a live frame (via WebRTC DataChannel + BroadcastChannel)
+   * Broadcast a live frame (via WebRTC DataChannel + BroadcastChannel + local listeners)
    */
   public broadcastFrame(payload: LiveFramePayload) {
     // 1. Send across network to Hub via WebRTC DataConnection
     this.activeDataConns.forEach((conn) => {
       if (conn.open) {
-        conn.send({ type: 'FRAME_DATA', payload });
+        try {
+          conn.send({ type: 'FRAME_DATA', payload });
+        } catch {}
       }
     });
 
-    // 2. Send locally via BroadcastChannel
+    // 2. Send locally via BroadcastChannel for multi-tab / same-device testing
     if (this.channel) {
       try {
         this.channel.postMessage(payload);
-      } catch (err) {
-        // Safe fallback
-      }
+      } catch {}
     }
+
+    // 3. Dispatch locally
+    this.dispatchFrameLocally(payload);
   }
 
   private dispatchFrameLocally(payload: LiveFramePayload) {
@@ -225,6 +255,13 @@ class CCTVStreamService {
     };
   }
 
+  public subscribeToAllFrames(callback: FrameListener): () => void {
+    this.globalFrameListeners.add(callback);
+    return () => {
+      this.globalFrameListeners.delete(callback);
+    };
+  }
+
   public getFps(cameraId: string): number {
     return this.calculatedFps.get(cameraId) || 28;
   }
@@ -247,12 +284,22 @@ class CCTVStreamService {
   }
 
   public cleanup() {
-    this.activeCalls.forEach((call) => call.close());
+    this.activeCalls.forEach((call) => {
+      try {
+        call.close();
+      } catch {}
+    });
     this.activeCalls.clear();
-    this.activeDataConns.forEach((conn) => conn.close());
+    this.activeDataConns.forEach((conn) => {
+      try {
+        conn.close();
+      } catch {}
+    });
     this.activeDataConns.clear();
     if (this.peer) {
-      this.peer.destroy();
+      try {
+        this.peer.destroy();
+      } catch {}
       this.peer = null;
     }
     this.isHubInitialized = false;
