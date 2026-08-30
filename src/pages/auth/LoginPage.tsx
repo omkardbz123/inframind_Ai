@@ -1,20 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  GraduationCap,
-  UserCheck,
   Shield,
   Wrench,
   Briefcase,
+  UserCheck,
   ArrowRight,
   Lock,
   Mail,
   AlertCircle,
   Loader2,
+  KeyRound,
+  CheckCircle2,
+  X,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { useUserStore } from '../../store/userStore';
 import { UserRole } from '../../types/user';
 import { COLLEGE_CONFIG } from '../../lib/constants';
+import { sendPasswordResetOtpEmail } from '../../lib/emailSimulator';
 
 declare global {
   interface Window {
@@ -26,14 +31,44 @@ const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
   '632291817556-6qonel2v1pqrv6522meld8jfio14hd42.apps.googleusercontent.com';
 
+const STORAGE_PASSWORDS_KEY = 'campuscare_user_passwords';
+
+function getStoredPasswords(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_PASSWORDS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveUserPassword(email: string, pass: string) {
+  const all = getStoredPasswords();
+  all[email.toLowerCase().trim()] = pass;
+  localStorage.setItem(STORAGE_PASSWORDS_KEY, JSON.stringify(all));
+}
+
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { loginWithGoogle, authError, clearAuthError } = useAuthStore();
+  const { users } = useUserStore();
 
-  const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
   const [inputEmail, setInputEmail] = useState('');
+  const [inputPassword, setInputPassword] = useState('');
   const [localError, setLocalError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isAuthenticatingWithGoogle, setIsAuthenticatingWithGoogle] = useState(false);
+
+  // Forgot Password / OTP Reset State
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [inputOtp, setInputOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
+  const [resetError, setResetError] = useState('');
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
 
   const googleButtonContainerRef = useRef<HTMLDivElement | null>(null);
   const tokenClientRef = useRef<any>(null);
@@ -44,7 +79,6 @@ export const LoginPage: React.FC = () => {
       if (typeof window === 'undefined' || !window.google?.accounts) return;
 
       try {
-        // 1. Initialize Google ID (JWT One-Tap / Button)
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleGoogleCredentialResponse,
@@ -52,7 +86,6 @@ export const LoginPage: React.FC = () => {
           cancel_on_tap_outside: true,
         });
 
-        // 2. Initialize OAuth2 Token Client for Popup flow
         tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
           client_id: GOOGLE_CLIENT_ID,
           scope: 'openid email profile',
@@ -65,7 +98,6 @@ export const LoginPage: React.FC = () => {
 
             if (tokenResponse.access_token) {
               try {
-                // Fetch authentic Google user info
                 const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                   headers: {
                     Authorization: `Bearer ${tokenResponse.access_token}`,
@@ -105,7 +137,6 @@ export const LoginPage: React.FC = () => {
     }
   }, []);
 
-  // Process decoded Google JWT or UserInfo payload
   const processAuthenticatedGoogleUser = async ({
     email,
     name,
@@ -120,11 +151,32 @@ export const LoginPage: React.FC = () => {
     clearAuthError();
 
     const localPart = email.split('@')[0];
-    const startsWithDigit = /^\d/.test(localPart);
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    const isCollegeDomain =
+      emailDomain === 'mitacsc.edu.in' ||
+      emailDomain === 'mitacsc.ac.in' ||
+      COLLEGE_CONFIG.allowedDomains.some(
+        (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
+      );
 
-    // Auto-detect role by MIT ACSC email convention
-    let role: UserRole = activeTab;
-    if (startsWithDigit) {
+    const matched = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+
+    // Authorization Rule:
+    // 1. College email (@mitacsc.edu.in) -> Allowed
+    // 2. External email -> Allowed only if registered as employee/staff in directory
+    if (!isCollegeDomain && !matched) {
+      setIsAuthenticatingWithGoogle(false);
+      setLocalError(
+        `Access Restricted: External account "${email}" is not an official MIT ACSC college email (@mitacsc.edu.in) and has not been registered as an authorized staff/technician in the system directory.`
+      );
+      return;
+    }
+
+    const startsWithDigit = /^\d/.test(localPart);
+    let role: UserRole = 'student';
+    if (matched) {
+      role = matched.role;
+    } else if (startsWithDigit && isCollegeDomain) {
       role = 'student';
     } else if (email.includes('admin') || email.includes('principal')) {
       role = 'admin';
@@ -141,10 +193,8 @@ export const LoginPage: React.FC = () => {
       role = 'teacher';
     }
 
-    // Default student Omkar avatar if not provided by Google API
     const finalAvatar =
-      picture ||
-      (email.startsWith('5454317') ? '/avatars/user_5454317.png' : undefined);
+      picture || (email.startsWith('5454317') ? '/avatars/user_5454317.png' : undefined);
 
     const loginRes = await loginWithGoogle(email, name, role, finalAvatar);
 
@@ -156,12 +206,10 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  // Callback from Google ID Credential JWT
   const handleGoogleCredentialResponse = async (response: any) => {
     if (!response.credential) return;
 
     try {
-      // Decode JWT Payload safely
       const base64Url = response.credential.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const jsonPayload = decodeURIComponent(
@@ -182,7 +230,6 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  // Trigger Google OAuth2 Popup
   const handleTriggerGoogleOAuth = () => {
     setLocalError('');
     clearAuthError();
@@ -197,7 +244,6 @@ export const LoginPage: React.FC = () => {
       }
     }
 
-    // Fallback: Direct Google OAuth 2.0 Auth Endpoint Popup Window
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(
       window.location.origin
     )}&response_type=token&scope=openid%20profile%20email&prompt=select_account`;
@@ -217,7 +263,6 @@ export const LoginPage: React.FC = () => {
       setIsAuthenticatingWithGoogle(false);
       setLocalError('Popup blocked by browser. Please allow popups for Google Sign-In.');
     } else {
-      // Listen for popup redirect hash or message
       const checkPopup = setInterval(() => {
         if (!popup || popup.closed) {
           clearInterval(checkPopup);
@@ -227,33 +272,161 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleDomainLogin = async (e: React.FormEvent) => {
+  // Password-based Email Sign-In
+  const handleEmailPasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError('');
+    setSuccessMessage('');
     clearAuthError();
 
-    const trimmed = inputEmail.trim().toLowerCase();
-    const emailDomain = trimmed.split('@')[1]?.toLowerCase();
-    const isAllowedDomain = COLLEGE_CONFIG.allowedDomains.some(
-      (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
-    );
+    const trimmedEmail = inputEmail.trim().toLowerCase();
+    const emailDomain = trimmedEmail.split('@')[1]?.toLowerCase();
+    const isCollegeDomain =
+      emailDomain === 'mitacsc.edu.in' ||
+      emailDomain === 'mitacsc.ac.in' ||
+      COLLEGE_CONFIG.allowedDomains.some(
+        (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
+      );
 
-    if (!isAllowedDomain) {
+    const matched = users.find((u) => u.email.toLowerCase() === trimmedEmail);
+
+    // Reject unregistered external emails
+    if (!isCollegeDomain && !matched) {
       setLocalError(
-        'Access Restricted: Only official college email addresses ending with @mitacsc.edu.in or @mitacsc.ac.in are permitted.'
+        `Access Restricted: "${trimmedEmail}" is not an official MIT ACSC college account (@mitacsc.edu.in) and has not been registered as an authorized staff/technician in the system directory.`
       );
       return;
     }
 
-    const userName =
-      activeTab === 'student'
-        ? trimmed.split('@')[0].toUpperCase()
-        : `Prof. ${trimmed.split('@')[0]}`;
+    // Check Password (stored password or default initial password "mitacsc@123")
+    const storedPasswords = getStoredPasswords();
+    const validPassword = storedPasswords[trimmedEmail] || 'mitacsc@123';
 
-    const res = await loginWithGoogle(trimmed, userName, activeTab);
+    if (inputPassword && inputPassword !== validPassword) {
+      setLocalError(
+        'Incorrect password. Default initial password is "mitacsc@123". If forgotten, click "Forgot Password?" to reset via OTP.'
+      );
+      return;
+    }
+
+    const localPart = trimmedEmail.split('@')[0];
+    const startsWithDigit = /^\d/.test(localPart);
+
+    let role: UserRole = 'student';
+    if (matched) {
+      role = matched.role;
+    } else if (startsWithDigit && isCollegeDomain) {
+      role = 'student';
+    } else if (trimmedEmail.includes('admin') || trimmedEmail.includes('principal')) {
+      role = 'admin';
+    } else if (trimmedEmail.includes('manager') || trimmedEmail.includes('estate')) {
+      role = 'manager';
+    } else if (
+      trimmedEmail.includes('electrician') ||
+      trimmedEmail.includes('plumber') ||
+      trimmedEmail.includes('tech') ||
+      trimmedEmail.includes('employee')
+    ) {
+      role = 'employee';
+    } else {
+      role = 'teacher';
+    }
+
+    const userName = matched
+      ? matched.displayName
+      : startsWithDigit
+      ? `Student ${localPart.toUpperCase()}`
+      : `Prof. ${localPart.charAt(0).toUpperCase() + localPart.slice(1)}`;
+
+    const avatar = trimmedEmail.startsWith('5454317')
+      ? '/avatars/user_5454317.png'
+      : matched?.photoURL;
+
+    const res = await loginWithGoogle(trimmedEmail, userName, role, avatar);
     if (res.success) {
       window.location.href = '/';
     }
+  };
+
+  // Open Forgot Password Modal
+  const handleOpenForgotPassword = () => {
+    setResetEmail(inputEmail.trim());
+    setResetError('');
+    setResetStep('request');
+    setInputOtp('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setIsResetModalOpen(true);
+  };
+
+  // Send 6-digit OTP
+  const handleSendResetOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+
+    const targetEmail = resetEmail.trim().toLowerCase();
+    if (!targetEmail) {
+      setResetError('Please enter your registered email address.');
+      return;
+    }
+
+    const emailDomain = targetEmail.split('@')[1]?.toLowerCase();
+    const isCollegeDomain =
+      emailDomain === 'mitacsc.edu.in' ||
+      emailDomain === 'mitacsc.ac.in' ||
+      COLLEGE_CONFIG.allowedDomains.some(
+        (domain) => emailDomain === domain || emailDomain?.endsWith(`.${domain}`)
+      );
+
+    const matched = users.find((u) => u.email.toLowerCase() === targetEmail);
+
+    if (!isCollegeDomain && !matched) {
+      setResetError(
+        `Access Restricted: "${targetEmail}" is not a recognized college email and is not registered in the staff directory.`
+      );
+      return;
+    }
+
+    setIsSendingOtp(true);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(otp);
+
+    // Send email with OTP
+    sendPasswordResetOtpEmail(targetEmail, otp);
+
+    setTimeout(() => {
+      setIsSendingOtp(false);
+      setResetStep('verify');
+    }, 600);
+  };
+
+  // Verify OTP and Set New Password
+  const handleVerifyAndResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+
+    if (inputOtp.trim() !== generatedOtp.trim()) {
+      setResetError('Invalid verification code. Please enter the exact 6-digit OTP received in your email.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    const targetEmail = resetEmail.trim().toLowerCase();
+    saveUserPassword(targetEmail, newPassword);
+
+    setIsResetModalOpen(false);
+    setInputEmail(targetEmail);
+    setInputPassword(newPassword);
+    setSuccessMessage('Password reset successfully! You can now sign in with your new password.');
   };
 
   const handleQuickDemoLogin = async (role: UserRole) => {
@@ -315,50 +488,21 @@ export const LoginPage: React.FC = () => {
 
         {/* Main Login Card */}
         <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-7 shadow-2xl border border-white/20 space-y-5">
-          {/* Segmented Tab Switcher */}
-          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('student');
-                setLocalError('');
-                clearAuthError();
-              }}
-              className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-                activeTab === 'student'
-                  ? 'bg-maroon-800 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              <span>Student Login</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('teacher');
-                setLocalError('');
-                clearAuthError();
-              }}
-              className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-                activeTab === 'teacher'
-                  ? 'bg-maroon-800 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Teacher / Faculty</span>
-            </button>
-          </div>
-
           {/* Domain Notice Banner */}
           <div className="p-3 bg-maroon-50 rounded-xl border border-maroon-100 text-xs text-maroon-900 flex items-center gap-2">
             <Shield className="w-4 h-4 text-maroon-800 shrink-0" />
             <div className="text-[11px] leading-tight">
-              <strong>Institutional Single Sign-On:</strong> Requires valid college email ID (e.g. <code>@mitacsc.edu.in</code>).
+              <strong>Institutional Single Sign-On:</strong> Enter your registered college ID (e.g. <code>@mitacsc.edu.in</code>) or authorized staff email.
             </div>
           </div>
+
+          {/* Success Message Banner */}
+          {successMessage && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2 animate-in fade-in duration-150">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span>{successMessage}</span>
+            </div>
+          )}
 
           {/* Error Message */}
           {(localError || authError) && (
@@ -368,7 +512,7 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Authentic Google Sign-In Trigger Button */}
+          {/* Google Sign-In Primary Button */}
           <button
             type="button"
             disabled={isAuthenticatingWithGoogle}
@@ -404,54 +548,71 @@ export const LoginPage: React.FC = () => {
             </span>
           </button>
 
-          {/* Hidden Container for Google Native GSI Button rendering */}
+          {/* Hidden GSI container */}
           <div ref={googleButtonContainerRef} className="hidden" />
 
           {/* Divider */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-slate-200" />
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Or Enter College Email
+              Or Sign In With Password
             </span>
             <div className="flex-1 h-px bg-slate-200" />
           </div>
 
-          {/* Email Input Form */}
-          <form onSubmit={handleDomainLogin} className="space-y-4">
+          {/* Email & Password Login Form */}
+          <form onSubmit={handleEmailPasswordLogin} className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-slate-500" />
-                  <span>College Email ID:</span>
+                  <span>Email Address:</span>
                 </label>
                 <button
                   type="button"
-                  onClick={() =>
-                    setInputEmail(
-                      activeTab === 'student' ? '5454317@mitacsc.edu.in' : 'dr.deshpande@mitacsc.edu.in'
-                    )
-                  }
+                  onClick={() => {
+                    setInputEmail('5454317@mitacsc.edu.in');
+                    setInputPassword('mitacsc@123');
+                  }}
                   className="text-[11px] text-maroon-800 font-semibold hover:underline"
                 >
                   Fill Sample
                 </button>
               </div>
 
-              <div className="relative">
-                <input
-                  type="email"
-                  required
-                  placeholder={
-                    activeTab === 'student' ? 'e.g. 5454317@mitacsc.edu.in' : 'e.g. faculty.name@mitacsc.edu.in'
-                  }
-                  value={inputEmail}
-                  onChange={(e) => setInputEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium text-xs"
-                />
+              <input
+                type="email"
+                required
+                placeholder="e.g. 5454317@mitacsc.edu.in or sbkhole@mitacsc.edu.in"
+                value={inputEmail}
+                onChange={(e) => setInputEmail(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium text-xs"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Password:</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleOpenForgotPassword}
+                  className="text-[11px] text-maroon-800 font-semibold hover:underline"
+                >
+                  Forgot Password?
+                </button>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">
-                Must end with <strong>@mitacsc.edu.in</strong> or <strong>@mitacsc.ac.in</strong>
-              </p>
+
+              <input
+                type="password"
+                required
+                placeholder="Enter account password (default: mitacsc@123)"
+                value={inputPassword}
+                onChange={(e) => setInputPassword(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium text-xs"
+              />
             </div>
 
             <button
@@ -459,7 +620,7 @@ export const LoginPage: React.FC = () => {
               className="w-full py-3 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs transition active:scale-98 text-xs"
             >
               <Lock className="w-4 h-4" />
-              <span>Enter {activeTab === 'student' ? 'Student' : 'Teacher'} Portal</span>
+              <span>Sign In to Campus Portal</span>
               <ArrowRight className="w-4 h-4 ml-1" />
             </button>
           </form>
@@ -546,6 +707,152 @@ export const LoginPage: React.FC = () => {
           <p className="text-[11px]">Smart India Hackathon • CampusCare Infrastructure Portal</p>
         </div>
       </div>
+
+      {/* Forgot Password / OTP Reset Modal Dialog */}
+      {isResetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 sm:p-7 space-y-5 text-slate-900">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-maroon-800 text-white flex items-center justify-center font-bold">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Reset Account Password</h3>
+                  <p className="text-xs text-slate-500">MIT ACSC Security Verification</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-900 rounded-xl"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {resetError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{resetError}</span>
+              </div>
+            )}
+
+            {resetStep === 'request' ? (
+              <form onSubmit={handleSendResetOtp} className="space-y-4 text-xs">
+                <p className="text-slate-600 leading-relaxed">
+                  Enter your official college email address. We will send a secure 6-digit verification code (OTP) to your inbox to reset your password.
+                </p>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1.5">Registered Email ID:</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. 5454317@mitacsc.edu.in"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Allowed: <strong>@mitacsc.edu.in</strong> or authorized employee accounts.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsResetModalOpen(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSendingOtp}
+                    className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl flex items-center gap-2 shadow-xs transition"
+                  >
+                    {isSendingOtp && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Send Verification Code</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyAndResetPassword} className="space-y-4 text-xs">
+                <div className="p-3 bg-maroon-50 rounded-xl border border-maroon-100 text-[11px] text-maroon-900">
+                  We dispatched a 6-digit code to <strong>{resetEmail}</strong>. (Also logged in Sent Logs for demo).
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1.5">6-Digit Verification Code (OTP):</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="e.g. 482910"
+                    value={inputOtp}
+                    onChange={(e) => setInputOtp(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-mono font-bold tracking-widest text-center text-base"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1.5">New Password:</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter new password (min. 6 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1.5">Confirm New Password:</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-maroon-700 font-medium"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSendResetOtp({ preventDefault: () => {} } as any)}
+                    className="text-[11px] text-maroon-800 font-bold hover:underline flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Resend Code</span>
+                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsResetModalOpen(false)}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white font-bold rounded-xl shadow-xs transition"
+                    >
+                      Reset Password
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

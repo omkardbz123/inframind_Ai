@@ -107,16 +107,19 @@ export function sendTransactionalEmail(params: {
     | 'SLABreach'
     | 'PredictiveAlert'
     | 'EmergencySOS'
-    | 'DailyDigest';
+    | 'DailyDigest'
+    | 'PasswordResetOTP'
+    | string;
   ticket?: Ticket;
   customData?: Record<string, any>;
   hasPdfAttachment?: boolean;
+  html?: string;
 }): SentEmailRecord {
-  const { to, subject, template, ticket, customData, hasPdfAttachment } = params;
+  const { to, subject, template, ticket, customData, hasPdfAttachment, html } = params;
 
-  let bodyHtml = '';
+  let bodyHtml = html || '';
 
-  if (template === 'TicketCreated' && ticket) {
+  if (!bodyHtml && template === 'TicketCreated' && ticket) {
     bodyHtml = `
       <div style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 24px; color: #1e293b;">
         <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
@@ -273,4 +276,42 @@ export function sendTransactionalEmail(params: {
     });
 
   return record;
+}
+
+/**
+ * Dispatch Password Reset OTP Email with Authentic MIT ACSC Template
+ */
+export function sendPasswordResetOtpEmail(email: string, otp: string): SentEmailRecord {
+  const subject = `🔐 MIT ACSC CampusCare: Password Reset Verification Code [${otp}]`;
+  const html = `
+    <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+      <div style="background: #800020; padding: 26px 24px; text-align: center; color: #ffffff;">
+        <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px;">MAEER's MIT ACSC Alandi</h1>
+        <p style="margin: 4px 0 0; font-size: 13px; color: #fce7eb;">CampusCare Infrastructure Security</p>
+      </div>
+      <div style="padding: 32px 28px; color: #1e293b;">
+        <h2 style="margin: 0 0 12px; font-size: 18px; color: #0f172a; font-weight: 700;">Password Reset Verification</h2>
+        <p style="margin: 0 0 20px; font-size: 14px; color: #475569; line-height: 1.6;">
+          You requested to reset your account password for <strong>${email}</strong>. Use the 6-digit verification code below to authorize your password change.
+        </p>
+        <div style="background: #fff5f7; border: 2px dashed #800020; border-radius: 14px; padding: 22px; text-align: center; margin: 24px 0;">
+          <span style="font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #800020; font-family: 'Courier New', monospace;">${otp}</span>
+          <p style="margin: 10px 0 0; font-size: 12px; color: #800020; font-weight: 600;">Valid for 10 minutes. Do not share this code.</p>
+        </div>
+        <p style="margin: 20px 0 0; font-size: 12px; color: #64748b; line-height: 1.5;">
+          If you did not request this code, your account is still secure and no changes were made.
+        </p>
+      </div>
+      <div style="background: #f8fafc; padding: 18px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9;">
+        MAEER's MIT Arts, Commerce & Science College, Alandi (D.), Pune - 412105 • Smart Campus Infrastructure
+      </div>
+    </div>
+  `;
+
+  return sendTransactionalEmail({
+    to: email,
+    subject,
+    template: 'password_reset_otp',
+    html,
+  });
 }
