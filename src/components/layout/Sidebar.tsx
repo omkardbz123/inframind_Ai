@@ -58,10 +58,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       roles: ['student', 'teacher'],
     },
 
-    // Employee / Tech view
+    // Employee / Tech / Admin / Manager Tasks view
     {
       to: '/assigned-tasks',
-      label: 'My Assigned Tasks',
+      label: selectedRole === 'employee' ? 'My Assigned Tasks' : 'Work Orders & Tasks',
       icon: Wrench,
       badge: assignedCount > 0 ? `${assignedCount}` : undefined,
       badgeColor: 'bg-amber-50 text-amber-800 border-amber-200',

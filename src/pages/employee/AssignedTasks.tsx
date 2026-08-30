@@ -1,21 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Wrench,
   Clock,
   CheckCircle2,
   Play,
   FileText,
-  X,
+  Search,
+  Filter,
+  RotateCcw,
+  Calendar,
+  MapPin,
+  Tag,
+  CheckCircle,
 } from 'lucide-react';
 import { useTicketStore } from '../../store/ticketStore';
 import { useAuthStore } from '../../store/authStore';
-import { Ticket } from '../../types/ticket';
+import { Ticket, TicketStatus } from '../../types/ticket';
+import { DepartmentType } from '../../types/user';
+import { DEPARTMENTS, CAMPUS_BUILDINGS } from '../../lib/constants';
 import { downloadTicketReportPDF } from '../../lib/pdfGenerator';
 import { sendTransactionalEmail } from '../../lib/emailSimulator';
 
 export const AssignedTasks: React.FC = () => {
   const { tickets, updateTicketStatus } = useTicketStore();
-  const { currentUser } = useAuthStore();
+  const { currentUser, selectedRole } = useAuthStore();
 
   const [selectedTicketForResolve, setSelectedTicketForResolve] = useState<Ticket | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('Replaced blown capacitor (3.15 uF) and tested fan speeds 1 to 5. Operational.');
@@ -23,12 +31,97 @@ export const AssignedTasks: React.FC = () => {
   const [actualCost, setActualCost] = useState<number>(350);
   const [proofPhoto, setProofPhoto] = useState('https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80');
 
-  const myTasks = tickets.filter(
-    (t) =>
-      t.assignedTo === currentUser?.uid ||
-      t.category === currentUser?.department ||
-      currentUser?.role === 'admin'
-  );
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<'all' | 'today' | '7days' | '30days'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
+  const isTechnician = selectedRole === 'employee';
+  const isAdminOrManager = selectedRole === 'admin' || selectedRole === 'manager';
+
+  // Base tickets visible to user
+  const baseTasks = useMemo(() => {
+    return tickets.filter((t) => {
+      if (isTechnician) {
+        return (
+          t.assignedTo === currentUser?.uid ||
+          t.category === currentUser?.department ||
+          t.assignedDepartment === currentUser?.department
+        );
+      }
+      return true; // Admin and Manager see all campus work orders
+    });
+  }, [tickets, isTechnician, currentUser]);
+
+  // Filtered tickets
+  const filteredTasks = useMemo(() => {
+    const now = Date.now();
+    const query = searchQuery.trim().toLowerCase();
+
+    return baseTasks.filter((t) => {
+      // 1. Text Search (ID, title, description, room, technician, reporter)
+      if (query) {
+        const matchesId = t.id.toLowerCase().includes(query);
+        const matchesTitle = t.title.toLowerCase().includes(query);
+        const matchesDesc = t.description?.toLowerCase().includes(query);
+        const matchesRoom = t.roomNumber?.toLowerCase().includes(query);
+        const matchesTech = t.assignedToName?.toLowerCase().includes(query);
+        const matchesReporter = t.reporterName?.toLowerCase().includes(query);
+
+        if (!matchesId && !matchesTitle && !matchesDesc && !matchesRoom && !matchesTech && !matchesReporter) {
+          return false;
+        }
+      }
+
+      // 2. Category / Type Filter (Plumbing, Electrical, etc.)
+      if (selectedCategory !== 'all' && t.category !== selectedCategory) {
+        return false;
+      }
+
+      // 3. Location Filter (Building)
+      if (selectedLocation !== 'all' && !t.building.toLowerCase().includes(selectedLocation.toLowerCase())) {
+        return false;
+      }
+
+      // 4. Status Filter
+      if (selectedStatus !== 'all') {
+        if (selectedStatus === 'open_or_assigned') {
+          if (t.status !== 'open' && t.status !== 'assigned') return false;
+        } else if (t.status !== selectedStatus) {
+          return false;
+        }
+      }
+
+      // 5. Date Filter (Created Date)
+      if (selectedDateFilter !== 'all') {
+        const createdMs = new Date(t.createdAt).getTime();
+        const diffHours = (now - createdMs) / (1000 * 3600);
+
+        if (selectedDateFilter === 'today' && diffHours > 24) return false;
+        if (selectedDateFilter === '7days' && diffHours > 24 * 7) return false;
+        if (selectedDateFilter === '30days' && diffHours > 24 * 30) return false;
+      }
+
+      return true;
+    });
+  }, [baseTasks, searchQuery, selectedCategory, selectedLocation, selectedDateFilter, selectedStatus]);
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('all');
+    setSelectedLocation('all');
+    setSelectedDateFilter('all');
+    setSelectedStatus('all');
+  };
+
+  const hasActiveFilters =
+    searchQuery !== '' ||
+    selectedCategory !== 'all' ||
+    selectedLocation !== 'all' ||
+    selectedDateFilter !== 'all' ||
+    selectedStatus !== 'all';
 
   const handleStartWork = (ticketId: string) => {
     if (!currentUser) return;
@@ -75,116 +168,264 @@ export const AssignedTasks: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header - Role Adaptive */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            Technician Work Orders & Assignments
+            {isTechnician ? 'Technician Work Orders & Assignments' : 'Campus Work Orders & Technician Dispatch'}
             <span className="px-2.5 py-0.5 bg-maroon-50 text-maroon-800 text-xs font-mono font-bold rounded-md border border-maroon-200">
-              {myTasks.length} Assigned Orders
+              {filteredTasks.length} {filteredTasks.length === 1 ? 'Order' : 'Orders'}
             </span>
           </h2>
           <p className="text-xs text-slate-500">
-            Log replacement parts, update repair status, upload proof photos, and close tickets
+            {isTechnician
+              ? 'Log replacement parts, update repair status, upload proof photos, and close tickets'
+              : 'Monitor campus work order progress, technician assignments, SLA deadlines, and resolutions'}
           </p>
         </div>
       </div>
 
-      {/* Task Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {myTasks.map((ticket) => {
-          const isCritical = ticket.priority === 'critical';
-          const isInProgress = ticket.status === 'in_progress';
-          const isResolved = ticket.status === 'resolved';
+      {/* Search & Filter Bar */}
+      <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
+        <div className="flex flex-col md:flex-row items-center gap-2.5">
+          {/* Live Search Input */}
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by ticket #ID, problem title, room, technician, or reporter..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-maroon-700"
+            />
+          </div>
 
-          return (
-            <div
-              key={ticket.id}
-              className={`white-card p-5 rounded-2xl flex flex-col justify-between space-y-4 border transition-all ${
-                isInProgress ? 'border-maroon-800 ring-1 ring-maroon-800/20' : 'border-slate-200'
-              }`}
+          {/* Type / Category Filter */}
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-maroon-700 w-full md:w-auto"
             >
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-maroon-800">#{ticket.id}</span>
-                    {isCritical && (
-                      <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-mono font-bold rounded">
-                        CRITICAL
-                      </span>
-                    )}
-                  </div>
+              <option value="all">All Types / Categories</option>
+              <option value="electrical">⚡ Electrical</option>
+              <option value="plumbing">💧 Plumbing</option>
+              <option value="technical">💻 Technical / IT</option>
+              <option value="janitorial">✨ Janitorial</option>
+              <option value="furniture">🪑 Furniture</option>
+              <option value="network">📶 Network</option>
+            </select>
 
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border uppercase ${
-                      isResolved
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : isInProgress
-                        ? 'bg-amber-50 text-amber-800 border-amber-200'
-                        : 'bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    {ticket.status.replace('_', ' ')}
-                  </span>
-                </div>
+            {/* Location Filter */}
+            <select
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-maroon-700 w-full md:w-auto"
+            >
+              <option value="all">All Locations</option>
+              {CAMPUS_BUILDINGS.map((b) => (
+                <option key={b.id} value={b.name}>
+                  {b.name.split('(')[0]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-                <h3 className="font-bold text-sm text-slate-900">{ticket.title}</h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">{ticket.description}</p>
+        {/* Sub-Filters: Date & Status */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-400 font-medium text-[11px] flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5" /> Filters:
+            </span>
 
-                {/* Location Box */}
-                <div className="mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
-                  <div><strong>Location:</strong> {ticket.building}</div>
-                  <div>Floor {ticket.floor}, {ticket.wing.toUpperCase()} (Room {ticket.roomNumber || 'General'})</div>
-                  <div className="text-[10px] text-slate-500 font-mono pt-0.5">
-                    Reported by: {ticket.reporterName} ({ticket.reporterRole})
-                  </div>
-                </div>
-
-                {/* SLA target deadline */}
-                <div className="mt-3 flex items-center justify-between text-xs font-mono">
-                  <span className="text-slate-500">Target SLA:</span>
-                  <span className="text-amber-800 font-bold">
-                    {new Date(ticket.slaDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(ticket.slaDeadline).toLocaleDateString()})
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+            {/* Status Pills */}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+              {[
+                { id: 'all', label: 'All Status' },
+                { id: 'open_or_assigned', label: 'Open / Assigned' },
+                { id: 'in_progress', label: 'In Progress' },
+                { id: 'resolved', label: 'Resolved' },
+              ].map((st) => (
                 <button
-                  onClick={() => downloadTicketReportPDF(ticket)}
-                  className="p-2 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 border border-slate-200 transition"
-                  title="Download Work Order PDF"
+                  key={st.id}
+                  onClick={() => setSelectedStatus(st.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                    selectedStatus === st.id
+                      ? 'bg-maroon-800 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 >
-                  <FileText className="w-4 h-4" />
+                  {st.label}
                 </button>
-
-                {!isResolved && (
-                  <div className="flex-1 flex gap-2">
-                    {!isInProgress ? (
-                      <button
-                        onClick={() => handleStartWork(ticket.id)}
-                        className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        <span>Start Work</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setSelectedTicketForResolve(ticket)}
-                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Mark Resolved</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+              ))}
             </div>
-          );
-        })}
+
+            {/* Date Filter Pills */}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+              {[
+                { id: 'all', label: 'All Dates' },
+                { id: 'today', label: 'Today (24h)' },
+                { id: '7days', label: 'Last 7 Days' },
+                { id: '30days', label: 'This Month' },
+              ].map((df) => (
+                <button
+                  key={df.id}
+                  onClick={() => setSelectedDateFilter(df.id as any)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                    selectedDateFilter === df.id
+                      ? 'bg-maroon-800 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {df.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1 transition"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset Filters</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Task Cards Grid */}
+      {filteredTasks.length === 0 ? (
+        <div className="white-card p-12 text-center rounded-3xl space-y-3">
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+            <Clock className="w-6 h-6" />
+          </div>
+          <h3 className="font-bold text-sm text-slate-800">No work orders match the selected filters</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            Try adjusting your search query, location, category, or date range filters.
+          </p>
+          <button
+            onClick={handleResetFilters}
+            className="px-4 py-2 bg-maroon-800 text-white text-xs font-bold rounded-xl shadow-xs"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTasks.map((ticket) => {
+            const isCritical = ticket.priority === 'critical';
+            const isInProgress = ticket.status === 'in_progress';
+            const isResolved = ticket.status === 'resolved';
+
+            return (
+              <div
+                key={ticket.id}
+                className={`white-card p-5 rounded-2xl flex flex-col justify-between space-y-4 border transition-all ${
+                  isInProgress ? 'border-maroon-800 ring-1 ring-maroon-800/20' : 'border-slate-200'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-maroon-800">#{ticket.id}</span>
+                      {isCritical && (
+                        <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-mono font-bold rounded">
+                          CRITICAL
+                        </span>
+                      )}
+                    </div>
+
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border uppercase ${
+                        isResolved
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : isInProgress
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {ticket.status.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <h3 className="font-bold text-sm text-slate-900">{ticket.title}</h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">{ticket.description}</p>
+
+                  {/* Location Box */}
+                  <div className="mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
+                    <div>
+                      <strong>Location:</strong> {ticket.building}
+                    </div>
+                    <div>
+                      Floor {ticket.floor}, {ticket.wing.toUpperCase()} (Room {ticket.roomNumber || 'General'})
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono pt-0.5">
+                      Technician: <strong className="text-slate-800">{ticket.assignedToName || 'Unassigned'}</strong>
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      Reported by: {ticket.reporterName} ({ticket.reporterRole})
+                    </div>
+                  </div>
+
+                  {/* SLA target deadline */}
+                  <div className="mt-3 flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-500">Target SLA:</span>
+                    <span className="text-amber-800 font-bold">
+                      {new Date(ticket.slaDeadline).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}{' '}
+                      ({new Date(ticket.slaDeadline).toLocaleDateString()})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => downloadTicketReportPDF(ticket)}
+                    className="p-2 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 border border-slate-200 transition"
+                    title="Download Work Order PDF"
+                  >
+                    <FileText className="w-4 h-4" />
+                  </button>
+
+                  {!isResolved && (
+                    <div className="flex-1 flex gap-2">
+                      {!isInProgress ? (
+                        <button
+                          onClick={() => handleStartWork(ticket.id)}
+                          className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                          <span>Start Work</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setSelectedTicketForResolve(ticket)}
+                          className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Mark Resolved</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {isResolved && (
+                    <div className="flex-1 py-1.5 text-center text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl border border-emerald-200">
+                      Closed & Verified
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Resolve Work Order Modal */}
       {selectedTicketForResolve && (

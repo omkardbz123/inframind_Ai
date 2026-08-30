@@ -1,10 +1,24 @@
 import React, { useState } from 'react';
-import { Bot, Mic, Sparkles } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Bot, Mic } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { AIChatComplaintModal } from './AIChatComplaintModal';
 
 export const FloatingAIAssistantButton: React.FC = () => {
+  const location = useLocation();
+  const { selectedRole } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
+
+  // 1. Only render for students and teachers
+  if (selectedRole !== 'student' && selectedRole !== 'teacher') {
+    return null;
+  }
+
+  // 2. Only show on the main tab (campus overview / dashboard) and my complaint dashboard (/my-tickets)
+  const allowedPaths = ['/', '/my-tickets'];
+  if (!allowedPaths.includes(location.pathname)) {
+    return null;
+  }
 
   return (
     <>
