@@ -1,8 +1,10 @@
 import Peer, { MediaConnection, DataConnection } from 'peerjs';
+import { useCCTVStore } from '../store/cctvStore';
+import { CCTVCamera } from '../types/cctv';
 
 /**
  * Universal Cross-Device WebRTC Live Video Streaming & Telemetry Service
- * Enables phones anywhere on 4G/Wi-Fi to stream 30-60 FPS video directly to PC dashboard.
+ * Enables phones anywhere on 4G/Wi-Fi to stream 28-60 FPS video directly to PC dashboard.
  */
 
 export interface LiveFramePayload {
@@ -45,6 +47,7 @@ class CCTVStreamService {
   private isHubInitialized = false;
   private isNodeInitialized = false;
   private currentHubId = DEFAULT_HUB_ID;
+  private nodeRegistrationData: Partial<CCTVCamera> | null = null;
 
   constructor() {
     // 1. Local same-device / cross-tab BroadcastChannel fallback
@@ -100,6 +103,15 @@ class CCTVStreamService {
           call.on('stream', (remoteStream) => {
             console.log('🎥 WebRTC Remote MediaStream Received from:', call.peer);
             this.streamListeners.forEach((cb) => cb(remoteStream, call.peer));
+
+            // Automatically register / update camera in store
+            try {
+              const cctvStore = useCCTVStore.getState();
+              cctvStore.updatePhoneHeartbeat(call.peer, undefined, undefined, undefined);
+              cctvStore.selectCamera(call.peer);
+            } catch (e) {
+              console.warn('Auto register on stream error:', e);
+            }
           });
 
           this.activeCalls.set(call.peer, call);
@@ -107,20 +119,51 @@ class CCTVStreamService {
 
         peer.on('connection', (conn) => {
           console.log('🔗 High-Speed DataConnection established with:', conn.peer);
+          
+          conn.on('open', () => {
+            console.log('⚡ DataConnection open with:', conn.peer);
+          });
+
           conn.on('data', (data: any) => {
-            if (data && data.type === 'FRAME_DATA') {
-              const payload: LiveFramePayload = data.payload;
-              this.calculateFps(payload.cameraId, payload.timestamp);
-              this.dispatchFrameLocally(payload);
+            if (data) {
+              if (data.type === 'REGISTER_PHONE') {
+                console.log('📱 Phone Node Registered via WebRTC DataConnection:', data.payload);
+                try {
+                  const cctvStore = useCCTVStore.getState();
+                  cctvStore.registerPhoneNode(data.payload);
+                } catch (e) {
+                  console.warn('Register phone store error:', e);
+                }
+              } else if (data.type === 'FRAME_DATA') {
+                const payload: LiveFramePayload = data.payload;
+                if (payload && payload.cameraId) {
+                  this.calculateFps(payload.cameraId, payload.timestamp);
+                  this.dispatchFrameLocally(payload);
+
+                  // Update thumbnail & heartbeat periodically in store for real-time dashboard updates
+                  if (payload.sequence % 10 === 0 || payload.sequence === 1) {
+                    try {
+                      const cctvStore = useCCTVStore.getState();
+                      cctvStore.updatePhoneHeartbeat(
+                        payload.cameraId,
+                        payload.frameDataUrl,
+                        payload.battery,
+                        payload.torch
+                      );
+                    } catch {}
+                  }
+                }
+              }
             }
           });
+
           this.activeDataConns.set(conn.peer, conn);
         });
 
         peer.on('error', (err) => {
           console.warn('WebRTC Hub Notice:', err.type, err.message);
           if (err.type === 'unavailable-id') {
-            const altId = `mit-acsc-hub-${Math.floor(1000 + Math.random() * 9000)}`;
+            const altId = `${hubId}-alt`;
             this.initHub(altId, onStreamReceived).then(resolve);
           }
         });
@@ -134,11 +177,22 @@ class CCTVStreamService {
   /**
    * Initialize Phone as an Active CCTV Camera Node (Streams video to PC Hub)
    */
-  public initPhoneNode(nodeId: string, localMediaStream: MediaStream, hubId: string = DEFAULT_HUB_ID): Promise<boolean> {
+  public initPhoneNode(
+    nodeId: string,
+    localMediaStream: MediaStream,
+    hubId: string = DEFAULT_HUB_ID,
+    registrationData?: Partial<CCTVCamera>
+  ): Promise<boolean> {
     return new Promise((resolve) => {
       this.cleanup();
       this.localStream = localMediaStream;
       this.currentHubId = hubId;
+      this.nodeRegistrationData = registrationData || {
+        id: nodeId,
+        name: `📱 Phone Camera Node (${nodeId})`,
+        isPhoneNode: true,
+        isLiveStreaming: true,
+      };
 
       try {
         const peer = new Peer(nodeId, {
@@ -159,7 +213,7 @@ class CCTVStreamService {
           console.warn('Phone WebRTC Notice:', err.type, err.message);
           if (err.type === 'unavailable-id') {
             const randNodeId = `${nodeId}-${Math.floor(100 + Math.random() * 900)}`;
-            this.initPhoneNode(randNodeId, localMediaStream, hubId).then(resolve);
+            this.initPhoneNode(randNodeId, localMediaStream, hubId, registrationData).then(resolve);
           }
         });
       } catch (err) {
@@ -189,13 +243,30 @@ class CCTVStreamService {
         conn.on('open', () => {
           console.log('⚡ High-speed WebRTC data channel connected to Hub');
           this.activeDataConns.set(hubId, conn);
+
+          // Send initial registration packet over WebRTC
+          if (this.nodeRegistrationData) {
+            conn.send({
+              type: 'REGISTER_PHONE',
+              payload: this.nodeRegistrationData,
+            });
+          }
         });
+
         conn.on('close', () => {
           setTimeout(() => {
             if (this.peer && !this.peer.destroyed) {
               const retryConn = this.peer.connect(hubId, { reliable: false });
               if (retryConn) {
-                retryConn.on('open', () => this.activeDataConns.set(hubId, retryConn));
+                retryConn.on('open', () => {
+                  this.activeDataConns.set(hubId, retryConn);
+                  if (this.nodeRegistrationData) {
+                    retryConn.send({
+                      type: 'REGISTER_PHONE',
+                      payload: this.nodeRegistrationData,
+                    });
+                  }
+                });
               }
             }
           }, 2000);

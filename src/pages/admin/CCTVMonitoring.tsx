@@ -16,7 +16,7 @@ import {
 import { useCCTVStore } from '../../store/cctvStore';
 import { useAuthStore } from '../../store/authStore';
 import { CCTVCamera, CCTVSnapshotRecord } from '../../types/cctv';
-import { cctvStreamService, LiveFramePayload } from '../../lib/cctvStreamService';
+import { cctvStreamService, LiveFramePayload, DEFAULT_HUB_ID } from '../../lib/cctvStreamService';
 import { QRCodeSVG } from 'qrcode.react';
 
 export const CCTVMonitoring: React.FC = () => {
@@ -34,7 +34,7 @@ export const CCTVMonitoring: React.FC = () => {
 
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
   const [isQuadView, setIsQuadView] = useState(false);
-  const [hubId, setHubId] = useState<string>('hub-main-01');
+  const [hubId, setHubId] = useState<string>(DEFAULT_HUB_ID);
   const [liveFps, setLiveFps] = useState<number>(28);
   const [liveLatencyMs, setLiveLatencyMs] = useState<number>(24);
   const [liveTimestamp, setLiveTimestamp] = useState<string>('');
@@ -50,18 +50,20 @@ export const CCTVMonitoring: React.FC = () => {
 
   // Initialize WebRTC Hub & Listeners
   useEffect(() => {
-    const existingHub = localStorage.getItem('cctv_hub_id') || `hub-${Date.now().toString(36)}`;
-    localStorage.setItem('cctv_hub_id', existingHub);
-    setHubId(existingHub);
+    const targetHub = DEFAULT_HUB_ID;
+    setHubId(targetHub);
 
-    cctvStreamService.initHub(existingHub);
+    cctvStreamService.initHub(targetHub);
 
     // 1. Direct WebRTC MediaStream
-    const unsubscribeStream = cctvStreamService.subscribeToStream((stream: MediaStream) => {
+    const unsubscribeStream = cctvStreamService.subscribeToStream((stream: MediaStream, camId: string) => {
       setHasRemoteWebRtcStream(true);
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = stream;
         remoteVideoRef.current.play().catch(() => {});
+      }
+      if (camId) {
+        selectCamera(camId);
       }
     });
 
@@ -309,6 +311,30 @@ export const CCTVMonitoring: React.FC = () => {
                     </div>
 
                     <div className="font-bold text-xs text-slate-900">{cam.areaDescription}</div>
+
+                    {cam.isPhoneNode && (
+                      <div className="mt-2 flex items-center gap-2 p-1.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl">
+                        <div className="w-14 h-9 rounded-lg overflow-hidden bg-slate-950 shrink-0 border border-emerald-300 relative">
+                          {cam.currentSnapshotURL ? (
+                            <img src={cam.currentSnapshotURL} alt="Live Feed" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-emerald-400">
+                              STREAM
+                            </div>
+                          )}
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        </div>
+                        <div className="text-[10px] text-emerald-900">
+                          <div className="font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span>Real-Time Stream</span>
+                          </div>
+                          <div className="font-mono text-[9px] text-emerald-700">
+                            Battery: {cam.deviceBattery ?? 90}% • 28+ FPS
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-between">
                       <span>

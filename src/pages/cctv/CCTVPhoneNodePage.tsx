@@ -140,9 +140,23 @@ export const CCTVPhoneNodePage: React.FC = () => {
 
       setCameraActive(true);
 
+      const regPayload = {
+        id: nodeId,
+        name: nodeName,
+        building,
+        floor,
+        wing,
+        areaDescription,
+        isPhoneNode: true,
+        isLiveStreaming: true,
+        deviceBattery: batteryLevel,
+      };
+
+      registerPhoneNode(regPayload);
+
       // Connect via Universal WebRTC PeerJS to Central PC Hub
       cctvStreamService
-        .initPhoneNode(nodeId, stream, hubId)
+        .initPhoneNode(nodeId, stream, hubId, regPayload)
         .then(() => {
           setIsWebRtcConnected(true);
         })
