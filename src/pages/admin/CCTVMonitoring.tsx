@@ -120,7 +120,9 @@ export const CCTVMonitoring: React.FC = () => {
     if (!selectedCam) return;
 
     try {
-      if (selectedCam.isPhoneNode && remoteVideoRef.current && hasRemoteWebRtcStream) {
+      let capturedSnapshot: string | undefined = undefined;
+
+      if (remoteVideoRef.current && hasRemoteWebRtcStream && remoteVideoRef.current.videoWidth > 0) {
         const video = remoteVideoRef.current;
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth || 640;
@@ -128,11 +130,20 @@ export const CCTVMonitoring: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const frameSnapshot = canvas.toDataURL('image/jpeg', 0.85);
-          updateCameraImages(selectedCam.id, undefined, frameSnapshot);
+          capturedSnapshot = canvas.toDataURL('image/jpeg', 0.85);
         }
-      } else if (latestFrameDataRef.current && latestFrameDataRef.current.startsWith('data:')) {
-        updateCameraImages(selectedCam.id, undefined, latestFrameDataRef.current);
+      } else if (liveCanvasRef.current && liveCanvasRef.current.width > 0) {
+        try {
+          capturedSnapshot = liveCanvasRef.current.toDataURL('image/jpeg', 0.85);
+        } catch {}
+      }
+
+      if (!capturedSnapshot && latestFrameDataRef.current && latestFrameDataRef.current.startsWith('data:')) {
+        capturedSnapshot = latestFrameDataRef.current;
+      }
+
+      if (capturedSnapshot) {
+        updateCameraImages(selectedCam.id, undefined, capturedSnapshot);
       }
 
       const result = await runCameraAnalysis(selectedCam.id, customGeminiApiKey);
@@ -539,10 +550,35 @@ export const CCTVMonitoring: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
-                    <div className="font-bold text-maroon-900">AI Diagnostic Summary:</div>
-                    <div className="text-slate-600 leading-relaxed">
-                      {lastAnalyzedResult.geminiExplanation}
+                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-maroon-900 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Google Gemini Vision Analysis:</span>
+                      </span>
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono font-semibold">
+                        Gemini 2.5 Flash
+                      </span>
+                    </div>
+
+                    {lastAnalyzedResult.detectedIssues && lastAnalyzedResult.detectedIssues.length > 0 && (
+                      <ul className="space-y-1 pl-1">
+                        {lastAnalyzedResult.detectedIssues.map((issue, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5 text-slate-700 text-[11px]">
+                            <span className="text-maroon-700 font-bold">•</span>
+                            <span>{issue}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-100">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Actionable Recommendation:
+                      </div>
+                      <div className="text-slate-700 font-medium leading-relaxed mt-0.5">
+                        {lastAnalyzedResult.geminiExplanation}
+                      </div>
                     </div>
                   </div>
 
