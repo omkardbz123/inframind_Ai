@@ -11,7 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+# Local data & binaries
 cloudflared.exe
+server/db.json
 
 # Environment variables & secrets
 .env

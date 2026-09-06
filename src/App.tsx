@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
 import { QuickLoginPage } from './pages/auth/QuickLoginPage';
 import { DetailsPage } from './pages/shared/DetailsPage';
+import { TechnicalityPage } from './pages/shared/TechnicalityPage';
+import { WorkflowPage } from './pages/shared/WorkflowPage';
 import { DashboardOverview } from './pages/shared/DashboardOverview';
 import { ReportFault } from './pages/student/ReportFault';
 import { MyTickets } from './pages/student/MyTickets';
@@ -18,8 +20,15 @@ import { AnalyticsReports } from './pages/admin/AnalyticsReports';
 import { UserDirectory } from './pages/admin/UserDirectory';
 import { UserPortalsGateway } from './pages/shared/UserPortalsGateway';
 import { CCTVPhoneNodePage } from './pages/cctv/CCTVPhoneNodePage';
+import { syncService } from './lib/syncService';
 
 export function App() {
+  // Start universal real-time multi-device sync
+  useEffect(() => {
+    syncService.start();
+    return () => syncService.stop();
+  }, []);
+
   // If the browser URL directly targets CCTV Node mode via path or query
   const isDirectCctvNode =
     typeof window !== 'undefined' &&
@@ -44,6 +53,10 @@ export function App() {
         <Route path="/details" element={<DetailsPage />} />
         <Route path="/architecture" element={<DetailsPage />} />
         <Route path="/docs" element={<DetailsPage />} />
+        <Route path="/technicality" element={<TechnicalityPage />} />
+        <Route path="/technical" element={<TechnicalityPage />} />
+        <Route path="/workflow" element={<WorkflowPage />} />
+        <Route path="/workflows" element={<WorkflowPage />} />
 
         {/* Dedicated Smartphone CCTV Node Standalone Public Routes */}
         <Route path="/cctv-node" element={<CCTVPhoneNodePage />} />

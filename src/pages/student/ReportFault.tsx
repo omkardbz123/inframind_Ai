@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
   Zap,
@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   FileText,
   AlertTriangle,
+  Bot,
 } from 'lucide-react';
 import { DEPARTMENTS, CAMPUS_BUILDINGS } from '../../lib/constants';
 import { DepartmentType } from '../../types/user';
@@ -28,6 +29,7 @@ import { QRScannerModal } from '../../components/common/QRScannerModal';
 import { Asset } from '../../types/asset';
 import { downloadTicketReportPDF } from '../../lib/pdfGenerator';
 import { sendTransactionalEmail } from '../../lib/emailSimulator';
+import { AIChatComplaintModal } from '../../components/common/AIChatComplaintModal';
 
 const ICONS_MAP: Record<DepartmentType, React.ElementType> = {
   electrical: Zap,
@@ -39,11 +41,9 @@ const ICONS_MAP: Record<DepartmentType, React.ElementType> = {
   general: AlertTriangle,
 };
 
-import { AIChatComplaintModal } from '../../components/common/AIChatComplaintModal';
-import { Bot } from 'lucide-react';
-
 export const ReportFault: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useAuthStore();
   const { createTicket } = useTicketStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,13 +80,14 @@ export const ReportFault: React.FC = () => {
     DEPARTMENTS.find((d) => d.id === category) || DEPARTMENTS[0];
 
   const handleScannedAsset = (asset: Asset) => {
-    setCategory(asset.category);
-    setSubcategory(asset.subcategory);
-    setBuilding(asset.building);
-    setFloor(asset.floor);
-    setWing(asset.wing);
+    if (!asset) return;
+    if (asset.category) setCategory(asset.category);
+    if (asset.subcategory) setSubcategory(asset.subcategory);
+    if (asset.building) setBuilding(asset.building);
+    if (typeof asset.floor === 'number') setFloor(asset.floor);
+    if (asset.wing) setWing(asset.wing);
     if (asset.roomNumber) setRoomNumber(asset.roomNumber);
-    setScannedAssetTag(asset.assetTag);
+    if (asset.assetTag) setScannedAssetTag(asset.assetTag);
     setSource('qr_scan');
     setTitle(`${asset.name} Malfunction / Issue`);
     setDescription(
@@ -94,6 +95,13 @@ export const ReportFault: React.FC = () => {
     );
     setStep(3); // Directly transitions to Step 3 for entering further details & photo proof
   };
+
+  // Automatically process scanned asset passed via React Router navigation state
+  useEffect(() => {
+    if (location.state && (location.state as any).asset) {
+      handleScannedAsset((location.state as any).asset);
+    }
+  }, [location.state]);
 
   const handleVoiceClassified = (result: any, transcript: string) => {
     setCategory(result.category);

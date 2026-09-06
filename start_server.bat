@@ -30,7 +30,7 @@ echo [OK] Cloudflare Tunnel client ready.
 
 echo.
 echo [3/4] Launching Cloudflare Public HTTPS Tunnel...
-start "Cloudflare Live Public Tunnel" cmd /k "title Cloudflare Live Public Tunnel && color 0B && echo ====================================================================== && echo   CLOUDFLARE LIVE PUBLIC TUNNEL FOR MIT ACSC CAMPUSCARE && echo ====================================================================== && echo. && echo Connecting local port 5180 to Cloudflare edge network... && echo Look below for your free public https://*.trycloudflare.com URL! && echo. && cloudflared.exe tunnel --url http://localhost:5180"
+start "Cloudflare Live Public Tunnel" cmd /k "title Cloudflare Live Public Tunnel && color 0B && echo ====================================================================== && echo   CLOUDFLARE LIVE PUBLIC TUNNEL FOR MIT ACSC CAMPUSCARE && echo ====================================================================== && echo. && echo Connecting local port 5180 to Cloudflare edge network... && echo Look below for your free public https://*.trycloudflare.com URL! && echo. && cloudflared.exe tunnel --url http://localhost:5180 --protocol http2"
 
 echo.
 echo [4/4] Opening local dashboard in your browser...

@@ -60,7 +60,8 @@ export const DashboardOverview: React.FC = () => {
   const cctvFailures = cameras.filter((c) => c.lastAnalysisResult === 'failure_detected');
 
   const handleQRScanned = (asset: Asset) => {
-    navigate('/report-fault');
+    setIsQRModalOpen(false);
+    navigate('/report-fault', { state: { asset, fromQr: true } });
   };
 
   const handleRatingSubmit = (e: React.FormEvent) => {

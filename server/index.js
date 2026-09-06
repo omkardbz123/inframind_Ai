@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { serverStore } from './serverStore.js';
 
 dotenv.config();
 
@@ -16,7 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({ origin: '*' }));
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 // Helper to create Nodemailer transporter
 function getTransporter() {
@@ -36,7 +37,83 @@ function getTransporter() {
   });
 }
 
-// 1. Health check & configuration status
+// ==========================================
+// 1. REAL-TIME DATA SYNC & STATE ENDPOINTS
+// ==========================================
+
+// Full State Sync endpoint (polled by clients every 2s for multi-device live sync)
+app.get('/api/sync', (req, res) => {
+  const since = parseInt(req.query.sinceVersion || '0', 10);
+  const data = serverStore.getSyncState(since);
+  res.json({ success: true, ...data });
+});
+
+// Tickets REST API
+app.get('/api/tickets', (req, res) => {
+  const tickets = serverStore.getTickets();
+  res.json({ success: true, tickets });
+});
+
+app.get('/api/tickets/:id', (req, res) => {
+  const ticket = serverStore.getTicketById(req.params.id);
+  if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+  res.json({ success: true, ticket });
+});
+
+app.post('/api/tickets', (req, res) => {
+  try {
+    const created = serverStore.createTicket(req.body);
+    console.log(`[Sync Engine] New Ticket Created: #${created.id} by ${created.reporterName} (${created.title})`);
+    res.json({ success: true, ticket: created });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/tickets/:id', (req, res) => {
+  try {
+    const updated = serverStore.updateTicket(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, error: 'Ticket not found' });
+    console.log(`[Sync Engine] Ticket #${req.params.id} updated to status: ${updated.status}`);
+    res.json({ success: true, ticket: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Assets REST API
+app.get('/api/assets', (req, res) => {
+  res.json({ success: true, assets: serverStore.getAssets() });
+});
+
+app.post('/api/assets', (req, res) => {
+  const saved = serverStore.saveAsset(req.body);
+  res.json({ success: true, asset: saved });
+});
+
+// Notifications REST API
+app.get('/api/notifications', (req, res) => {
+  res.json({ success: true, notifications: serverStore.getNotifications() });
+});
+
+app.post('/api/notifications', (req, res) => {
+  const notif = serverStore.addNotification(req.body);
+  res.json({ success: true, notification: notif });
+});
+
+// CCTV REST API
+app.get('/api/cctv', (req, res) => {
+  res.json({ success: true, cameras: serverStore.getCCTV() });
+});
+
+app.post('/api/cctv', (req, res) => {
+  const saved = serverStore.saveCCTVCamera(req.body);
+  res.json({ success: true, camera: saved });
+});
+
+// ==========================================
+// 2. HEALTH CHECK & CONFIGURATION STATUS
+// ==========================================
 app.get('/api/health', (req, res) => {
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
@@ -46,13 +123,15 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     configured: isConfigured,
     senderEmail: user || null,
+    syncEngine: 'active',
+    ticketsCount: serverStore.getTickets().length,
     message: isConfigured
       ? `Gmail SMTP active (Sender: ${user})`
       : 'Waiting for Gmail user and App Password in .env',
   });
 });
 
-// 2. Save / Update Gmail configuration dynamically
+// Save / Update Gmail configuration dynamically
 app.post('/api/save-config', (req, res) => {
   try {
     const { gmailUser, gmailAppPassword } = req.body;
@@ -79,7 +158,9 @@ VITE_GEMINI_API_KEY=${process.env.VITE_GEMINI_API_KEY || ''}
   }
 });
 
-// 3. Send transactional email
+// ==========================================
+// 3. TRANSACTIONAL EMAIL DISPATCH
+// ==========================================
 app.post('/api/send-email', async (req, res) => {
   try {
     const { to, subject, html, attachments, replyTo } = req.body;
@@ -125,7 +206,7 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
-// 4. Send test email
+// Send test email
 app.post('/api/test-email', async (req, res) => {
   try {
     const { recipient } = req.body;
@@ -199,9 +280,9 @@ app.post('/api/test-email', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`=======================================================`);
-  console.log(`  MIT ACSC CampusCare Mail Backend Server Running`);
+  console.log(`  MIT ACSC CampusCare Sync & Mail Server Running`);
   console.log(`  URL: http://localhost:${PORT}`);
   console.log(`  Sender Gmail: ${process.env.GMAIL_USER || 'Not set'}`);
-  console.log(`  App Password: [CONFIGURED]`);
+  console.log(`  Real-Time Multi-Device Sync: ACTIVE`);
   console.log(`=======================================================`);
 });

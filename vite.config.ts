@@ -5,6 +5,7 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { serverStore } from './server/serverStore.js';
 
 dotenv.config();
 
@@ -23,10 +24,10 @@ function getTransporter() {
   });
 }
 
-// Built-in Email & SMTP API Middleware for Vite
-function emailApiPlugin() {
+// Built-in Real-Time Sync & Email API Middleware for Vite Server
+function campusCareApiPlugin() {
   return {
-    name: 'email-api-plugin',
+    name: 'campuscare-api-plugin',
     configureServer(server: any) {
       server.middlewares.use(async (req: any, res: any, next: any) => {
         if (!req.url?.startsWith('/api/')) {
@@ -48,9 +49,109 @@ function emailApiPlugin() {
           });
 
         res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-        // 1. Health check
-        if (req.url === '/api/health' && req.method === 'GET') {
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
+        const urlObj = new URL(req.url, 'http://localhost:5180');
+        const pathname = urlObj.pathname;
+
+        // ==========================================
+        // 1. REAL-TIME DATA SYNC & STATE ENDPOINTS
+        // ==========================================
+        if (pathname === '/api/sync' && req.method === 'GET') {
+          const since = parseInt(urlObj.searchParams.get('sinceVersion') || '0', 10);
+          const data = serverStore.getSyncState(since);
+          res.end(JSON.stringify({ success: true, ...data }));
+          return;
+        }
+
+        if (pathname === '/api/tickets' && req.method === 'GET') {
+          const tickets = serverStore.getTickets();
+          res.end(JSON.stringify({ success: true, tickets }));
+          return;
+        }
+
+        if (pathname.startsWith('/api/tickets/') && req.method === 'GET') {
+          const ticketId = pathname.replace('/api/tickets/', '');
+          const ticket = serverStore.getTicketById(ticketId);
+          if (!ticket) {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ success: false, error: 'Ticket not found' }));
+            return;
+          }
+          res.end(JSON.stringify({ success: true, ticket }));
+          return;
+        }
+
+        if (pathname === '/api/tickets' && req.method === 'POST') {
+          const body = await getBody();
+          const created = serverStore.createTicket(body);
+          console.log(`[Vite Sync Engine] New Ticket Created: #${created.id} by ${created.reporterName} (${created.title})`);
+          res.end(JSON.stringify({ success: true, ticket: created }));
+          return;
+        }
+
+        if (pathname.startsWith('/api/tickets/') && req.method === 'PUT') {
+          const ticketId = pathname.replace('/api/tickets/', '');
+          const body = await getBody();
+          const updated = serverStore.updateTicket(ticketId, body);
+          if (!updated) {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ success: false, error: 'Ticket not found' }));
+            return;
+          }
+          console.log(`[Vite Sync Engine] Ticket #${ticketId} updated to status: ${updated.status}`);
+          res.end(JSON.stringify({ success: true, ticket: updated }));
+          return;
+        }
+
+        if (pathname === '/api/assets' && req.method === 'GET') {
+          res.end(JSON.stringify({ success: true, assets: serverStore.getAssets() }));
+          return;
+        }
+
+        if (pathname === '/api/assets' && req.method === 'POST') {
+          const body = await getBody();
+          const saved = serverStore.saveAsset(body);
+          res.end(JSON.stringify({ success: true, asset: saved }));
+          return;
+        }
+
+        if (pathname === '/api/notifications' && req.method === 'GET') {
+          res.end(JSON.stringify({ success: true, notifications: serverStore.getNotifications() }));
+          return;
+        }
+
+        if (pathname === '/api/notifications' && req.method === 'POST') {
+          const body = await getBody();
+          const saved = serverStore.addNotification(body);
+          res.end(JSON.stringify({ success: true, notification: saved }));
+          return;
+        }
+
+        if (pathname === '/api/cctv' && req.method === 'GET') {
+          res.end(JSON.stringify({ success: true, cameras: serverStore.getCCTV() }));
+          return;
+        }
+
+        if (pathname === '/api/cctv' && req.method === 'POST') {
+          const body = await getBody();
+          const saved = serverStore.saveCCTVCamera(body);
+          res.end(JSON.stringify({ success: true, camera: saved }));
+          return;
+        }
+
+        // ==========================================
+        // 2. HEALTH & CONFIG
+        // ==========================================
+        if (pathname === '/api/health' && req.method === 'GET') {
           const user = process.env.GMAIL_USER;
           const pass = process.env.GMAIL_APP_PASSWORD;
           const isConfigured = Boolean(user && pass && pass.length >= 10);
@@ -60,6 +161,8 @@ function emailApiPlugin() {
               status: 'ok',
               configured: isConfigured,
               senderEmail: user || null,
+              syncEngine: 'active',
+              ticketsCount: serverStore.getTickets().length,
               message: isConfigured
                 ? `Gmail SMTP active (Sender: ${user})`
                 : 'Waiting for Gmail user and App Password in .env',
@@ -68,8 +171,7 @@ function emailApiPlugin() {
           return;
         }
 
-        // 2. Save Config
-        if (req.url === '/api/save-config' && req.method === 'POST') {
+        if (pathname === '/api/save-config' && req.method === 'POST') {
           const body = await getBody();
           const { gmailUser, gmailAppPassword } = body;
 
@@ -95,8 +197,10 @@ VITE_GEMINI_API_KEY=${process.env.VITE_GEMINI_API_KEY || ''}
           return;
         }
 
-        // 3. Test Email
-        if (req.url === '/api/test-email' && req.method === 'POST') {
+        // ==========================================
+        // 3. EMAIL DISPATCH
+        // ==========================================
+        if (pathname === '/api/test-email' && req.method === 'POST') {
           const body = await getBody();
           const { recipient } = body;
           const targetEmail = recipient || process.env.GMAIL_USER;
@@ -177,8 +281,7 @@ VITE_GEMINI_API_KEY=${process.env.VITE_GEMINI_API_KEY || ''}
           return;
         }
 
-        // 4. Transactional Send Email
-        if (req.url === '/api/send-email' && req.method === 'POST') {
+        if (pathname === '/api/send-email' && req.method === 'POST') {
           const body = await getBody();
           const { to, subject, html, attachments } = body;
 
@@ -230,7 +333,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    emailApiPlugin(),
+    campusCareApiPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],

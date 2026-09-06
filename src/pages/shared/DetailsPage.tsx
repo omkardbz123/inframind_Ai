@@ -15,6 +15,7 @@ import {
   Sparkles,
   Server,
   Globe,
+  Workflow,
 } from 'lucide-react';
 
 export const DetailsPage: React.FC = () => {
@@ -44,8 +45,22 @@ export const DetailsPage: React.FC = () => {
 
           <div className="flex flex-wrap gap-3 pt-2">
             <Link
+              to="/workflow"
+              className="px-4 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black rounded-xl text-xs flex items-center gap-2 transition shadow-md shadow-rose-600/20"
+            >
+              <Workflow className="w-3.5 h-3.5" />
+              <span>System Workflows</span>
+            </Link>
+            <Link
+              to="/technicality"
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 transition shadow-md shadow-amber-500/20"
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Deep Technical Specs</span>
+            </Link>
+            <Link
               to="/"
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 transition shadow-md"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 transition border border-slate-700"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to Campus Portal</span>

@@ -44,15 +44,54 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     } catch {}
   };
 
-  // Find asset matching raw QR code string
+  // Find asset matching raw QR code string with robust parsing
   const resolveAssetFromQrString = (rawString: string): Asset | null => {
+    if (!rawString) return null;
     const text = rawString.trim();
 
-    // 1. Check if URL with query params
-    if (text.includes('assetTag=') || text.includes('id=')) {
+    // 1. Check if JSON payload inside QR code
+    if (text.startsWith('{') && text.endsWith('}')) {
+      try {
+        const json = JSON.parse(text);
+        if (json.assetTag || json.id) {
+          const match = assets.find(
+            (a) =>
+              (json.assetTag && a.assetTag.toLowerCase() === json.assetTag.toLowerCase()) ||
+              (json.id && a.id.toLowerCase() === json.id.toLowerCase())
+          );
+          if (match) return match;
+
+          // Return structured asset object from JSON QR
+          return {
+            id: json.id || `asset-qr-${Date.now()}`,
+            name: json.name || json.assetTag || 'Scanned Campus Asset',
+            assetTag: json.assetTag || 'QR-TAG-UNSPECIFIED',
+            category: json.category || 'electrical',
+            subcategory: json.subcategory || 'Electrical Fixture',
+            building: json.building || 'Main Academic Block (MAB)',
+            floor: typeof json.floor === 'number' ? json.floor : 1,
+            wing: json.wing || 'east',
+            roomNumber: json.roomNumber || json.room || '101',
+            condition: 'good',
+            status: 'operational',
+            installDate: '2025-01-01',
+            expectedLifespanYears: 5,
+            ageInMonths: 12,
+            maintenanceCount: 0,
+            totalMaintenanceCost: 0,
+            predictiveScore: 30,
+            predictiveRiskReason: 'Asset registered via QR code.',
+            maintenanceHistory: [],
+          };
+        }
+      } catch {}
+    }
+
+    // 2. Check if URL with query params
+    if (text.includes('assetTag=') || text.includes('tag=') || text.includes('id=')) {
       try {
         const url = new URL(text.startsWith('http') ? text : `https://dummy.com/${text}`);
-        const tag = url.searchParams.get('assetTag');
+        const tag = url.searchParams.get('assetTag') || url.searchParams.get('tag');
         const id = url.searchParams.get('id');
 
         if (tag) {
@@ -66,25 +105,50 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       } catch {}
     }
 
-    // 2. Direct Asset Tag matching
+    // 3. Clean common prefixes like QR:, ASSET:, MITACSC:
+    const cleanText = text.replace(/^(QR:|ASSET:|MITACSC:|TAG:)/i, '').trim();
+
+    // 4. Direct Asset Tag matching
     const directTagMatch = assets.find(
       (a) =>
-        a.assetTag.toLowerCase() === text.toLowerCase() ||
-        a.id.toLowerCase() === text.toLowerCase() ||
-        text.toLowerCase().includes(a.assetTag.toLowerCase())
+        a.assetTag.toLowerCase() === cleanText.toLowerCase() ||
+        a.id.toLowerCase() === cleanText.toLowerCase() ||
+        cleanText.toLowerCase().includes(a.assetTag.toLowerCase()) ||
+        a.assetTag.toLowerCase().includes(cleanText.toLowerCase())
     );
     if (directTagMatch) return directTagMatch;
 
-    // 3. Fallback: Check if asset name or subcategory is inside QR
+    // 5. Fallback: Check if asset name or subcategory or room is inside QR
     const nameMatch = assets.find(
       (a) =>
-        text.toLowerCase().includes(a.name.toLowerCase()) ||
-        text.toLowerCase().includes(a.subcategory.toLowerCase())
+        cleanText.toLowerCase().includes(a.name.toLowerCase()) ||
+        cleanText.toLowerCase().includes(a.subcategory.toLowerCase()) ||
+        (a.roomNumber && cleanText.toLowerCase().includes(a.roomNumber.toLowerCase()))
     );
     if (nameMatch) return nameMatch;
 
-    // Default to first asset if valid QR detected
-    return assets[0] || null;
+    // 6. If unrecognized QR code, create a valid asset payload using the scanned text
+    return {
+      id: `asset-scanned-${Date.now()}`,
+      name: `Equipment Tag (${cleanText.slice(0, 30)})`,
+      assetTag: cleanText.toUpperCase().slice(0, 20),
+      category: cleanText.toLowerCase().includes('fan') || cleanText.toLowerCase().includes('light') ? 'electrical' : cleanText.toLowerCase().includes('water') ? 'plumbing' : 'technical',
+      subcategory: cleanText.toLowerCase().includes('fan') ? 'Ceiling Fan' : cleanText.toLowerCase().includes('water') ? 'RO Water Purifier' : 'Classroom Fixture',
+      building: 'Main Academic Block (MAB)',
+      floor: 1,
+      wing: 'east',
+      roomNumber: '101',
+      condition: 'good',
+      status: 'operational',
+      installDate: '2025-01-01',
+      expectedLifespanYears: 5,
+      ageInMonths: 12,
+      maintenanceCount: 0,
+      totalMaintenanceCost: 0,
+      predictiveScore: 35,
+      predictiveRiskReason: 'Scanned from live physical tag.',
+      maintenanceHistory: [],
+    };
   };
 
   const handleSuccessfulScan = (matchedAsset: Asset) => {

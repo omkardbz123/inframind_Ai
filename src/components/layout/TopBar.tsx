@@ -54,11 +54,13 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
       if (n.userId === currentUser.uid) return true;
       // 2. Global system broadcast
       if (n.userId === 'broadcast') return true;
-      // 3. Department technician match (e.g. user-electrician-01, user-plumber-01)
+      // 3. Department technician match (e.g. user-electrician-01, user-plumber-01, or any employee role)
       if (
         currentUser.role === 'employee' &&
-        currentUser.department &&
-        n.userId === `user-${currentUser.department}-01`
+        (n.userId === 'user-electrician-01' ||
+          n.userId === 'user-employee-01' ||
+          n.type === 'ticket_assigned' ||
+          (currentUser.department && n.userId === `user-${currentUser.department}-01`))
       ) {
         return true;
       }

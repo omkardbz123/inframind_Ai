@@ -57,6 +57,7 @@ export const CCTVMonitoring: React.FC = () => {
 
     // 1. Direct WebRTC MediaStream
     const unsubscribeStream = cctvStreamService.subscribeToStream((stream: MediaStream, camId: string) => {
+      console.log('🎥 WebRTC stream attached in CCTVMonitoring UI for camera:', camId);
       setHasRemoteWebRtcStream(true);
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = stream;
@@ -67,7 +68,7 @@ export const CCTVMonitoring: React.FC = () => {
       }
     });
 
-    // 2. High-speed 24-30 FPS Canvas Frame Decoder
+    // 2. High-speed 24-30 FPS Canvas Frame Decoder & Direct Multi-tab / P2P rendering
     const unsubscribeFrames = cctvStreamService.subscribeToAllFrames((frame: LiveFramePayload) => {
       latestFrameDataRef.current = frame.frameDataUrl;
       const calcFps = cctvStreamService.getFps(frame.cameraId);
@@ -98,23 +99,38 @@ export const CCTVMonitoring: React.FC = () => {
     };
   }, []);
 
-  // Fallback draw default camera snapshot on canvas when no phone frame arrives
+  // Update canvas when selectedCam changes or receives snapshot update
   useEffect(() => {
-    if (selectedCam && !selectedCam.isPhoneNode && liveCanvasRef.current) {
-      const canvas = liveCanvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          canvas.width = img.width || 640;
-          canvas.height = img.height || 480;
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        };
-        img.src = selectedCam.currentSnapshotURL || selectedCam.referenceImageURL;
+    if (selectedCam && liveCanvasRef.current) {
+      // If selected camera is phone node and we have latest incoming frame
+      if (selectedCam.isPhoneNode && latestFrameDataRef.current) {
+        const canvas = liveCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const img = new Image();
+          img.onload = () => {
+            canvas.width = img.width || 640;
+            canvas.height = img.height || 480;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          };
+          img.src = latestFrameDataRef.current;
+        }
+      } else if (!hasRemoteWebRtcStream) {
+        const canvas = liveCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            canvas.width = img.width || 640;
+            canvas.height = img.height || 480;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          };
+          img.src = selectedCam.currentSnapshotURL || selectedCam.referenceImageURL;
+        }
       }
     }
-  }, [selectedCam]);
+  }, [selectedCam, selectedCam.currentSnapshotURL, hasRemoteWebRtcStream]);
 
   const handleRunAnalysis = async () => {
     if (!selectedCam) return;

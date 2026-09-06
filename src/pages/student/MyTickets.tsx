@@ -8,12 +8,15 @@ import {
   PlusCircle,
   Info,
   Image as ImageIcon,
+  QrCode,
 } from 'lucide-react';
 import { useTicketStore } from '../../store/ticketStore';
 import { useAuthStore } from '../../store/authStore';
 import { downloadTicketReportPDF } from '../../lib/pdfGenerator';
 import { TicketDetailsModal } from '../../components/common/TicketDetailsModal';
+import { QRScannerModal } from '../../components/common/QRScannerModal';
 import { Ticket } from '../../types/ticket';
+import { Asset } from '../../types/asset';
 
 export const MyTickets: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +27,7 @@ export const MyTickets: React.FC = () => {
   const [ratingModalTicketId, setRatingModalTicketId] = useState<string | null>(null);
   const [ratingScore, setRatingScore] = useState<number>(5);
   const [ratingComment, setRatingComment] = useState('Technician fixed the fixture quickly and left the classroom clean.');
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
   const myTickets = tickets.filter(
     (t) => t.reporterId === currentUser?.uid || currentUser?.role === 'admin'
@@ -36,6 +40,11 @@ export const MyTickets: React.FC = () => {
     submitTicketFeedback(ratingModalTicketId, ratingScore, ratingComment);
     setRatingModalTicketId(null);
     alert('Thank you for rating the maintenance service!');
+  };
+
+  const handleQRScanned = (asset: Asset) => {
+    setIsQRModalOpen(false);
+    navigate('/report-fault', { state: { asset, fromQr: true } });
   };
 
   return (
@@ -54,13 +63,23 @@ export const MyTickets: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => navigate('/report-fault')}
-          className="px-4 py-2 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Report New Fault</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setIsQRModalOpen(true)}
+            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xs transition"
+          >
+            <QrCode className="w-4 h-4 text-slate-950" />
+            <span>Scan Asset QR</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/report-fault')}
+            className="px-4 py-2 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Report New Fault</span>
+          </button>
+        </div>
       </div>
 
       {/* Tickets List */}
@@ -282,6 +301,13 @@ export const MyTickets: React.FC = () => {
         isOpen={!!selectedTicketForDetails}
         onClose={() => setSelectedTicketForDetails(null)}
         canManage={false}
+      />
+
+      {/* Live QR Scanner Modal */}
+      <QRScannerModal
+        isOpen={isQRModalOpen}
+        onClose={() => setIsQRModalOpen(false)}
+        onScanAsset={handleQRScanned}
       />
     </div>
   );

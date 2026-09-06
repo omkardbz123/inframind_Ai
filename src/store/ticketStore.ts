@@ -4,6 +4,7 @@ import { DepartmentType } from '../types/user';
 import { WingType } from '../types/location';
 import { sendTransactionalEmail } from '../lib/emailSimulator';
 import { useNotificationStore } from './notificationStore';
+import { syncService } from '../lib/syncService';
 
 interface CreateTicketParams {
   title: string;
@@ -74,13 +75,13 @@ try {
 
 // Department Default Technicians
 const DEPARTMENT_TECH_MAP: Record<DepartmentType, { id: string; name: string; email: string }> = {
-  electrical: { id: 'user-electrician-01', name: 'Rajesh Kamble (Senior Electrician)', email: 'facilities.electrical@mitacsc.edu.in' },
-  plumbing: { id: 'user-plumber-01', name: 'Suresh Patil (Plumbing Tech)', email: 'facilities.plumbing@mitacsc.edu.in' },
-  technical: { id: 'user-tech-01', name: 'Anil Shinde (IT & AV Tech)', email: 'facilities.it@mitacsc.edu.in' },
-  janitorial: { id: 'user-janitor-01', name: 'Kavita Shinde (Housekeeping Lead)', email: 'facilities.housekeeping@mitacsc.edu.in' },
-  furniture: { id: 'user-carpenter-01', name: 'Sunil More (Carpentry)', email: 'facilities.carpentry@mitacsc.edu.in' },
+  electrical: { id: 'user-electrician-01', name: 'Rajesh Kamble (Senior Electrician)', email: 'rajesh.electrician@mitacsc.edu.in' },
+  plumbing: { id: 'user-plumber-01', name: 'Suresh Patil (Plumbing Tech)', email: 'suresh.plumber@mitacsc.edu.in' },
+  technical: { id: 'user-tech-01', name: 'Nitin Gore (Senior AV Administrator)', email: 'nitin.av@mitacsc.edu.in' },
+  janitorial: { id: 'user-janitor-01', name: 'Sunita Jadhav (Housekeeping Lead)', email: 'sunita.janitor@mitacsc.edu.in' },
+  furniture: { id: 'user-carpenter-01', name: 'Sandeep Mane (Civil/Carpentry Tech)', email: 'sandeep.civil@mitacsc.edu.in' },
   network: { id: 'user-network-01', name: 'Praveen Nair (Network Admin)', email: 'network.admin@mitacsc.edu.in' },
-  general: { id: 'user-electrician-01', name: 'Rajesh Kamble (Maintenance Lead)', email: 'facilities.maintenance@mitacsc.edu.in' },
+  general: { id: 'user-electrician-01', name: 'Rajesh Kamble (Maintenance Lead)', email: 'rajesh.electrician@mitacsc.edu.in' },
 };
 
 function getSlaDeadline(priority: TicketPriority): string {
@@ -378,6 +379,9 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       persist(updated);
       broadcastSync(updated);
 
+      // Async backend sync to server
+      syncService.pushNewTicket(newTicket).catch(() => {});
+
       // 1. Add notification to Student
       const notifStore = useNotificationStore.getState();
       notifStore.addNotification({
@@ -466,6 +470,8 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       broadcastSync(updated);
 
       if (modifiedTicket) {
+        syncService.pushTicketUpdate(ticketId, modifiedTicket).catch(() => {});
+
         const notifStore = useNotificationStore.getState();
         notifStore.addNotification({
           userId: assignedToId,
@@ -526,6 +532,10 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       persist(updated);
       broadcastSync(updated);
 
+      if (targetTicket) {
+        syncService.pushTicketUpdate(ticketId, targetTicket).catch(() => {});
+      }
+
       // If resolved, dispatch notifications and emails
       if (newStatus === 'resolved' && targetTicket) {
         const notifStore = useNotificationStore.getState();
@@ -574,6 +584,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       const state = get();
       const nowIso = new Date().toISOString();
 
+      let targetTicket: Ticket | undefined;
       const updated = state.tickets.map((t) => {
         if (t.id === ticketId) {
           const entry: TimelineEntry = {
@@ -584,10 +595,11 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             comment,
             timestamp: nowIso,
           };
-          return {
+          targetTicket = {
             ...t,
             timeline: [...t.timeline, entry],
           };
+          return targetTicket;
         }
         return t;
       });
@@ -595,17 +607,23 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       set({ tickets: updated });
       persist(updated);
       broadcastSync(updated);
+
+      if (targetTicket) {
+        syncService.pushTicketUpdate(ticketId, targetTicket).catch(() => {});
+      }
     },
 
     submitTicketFeedback: (ticketId: string, rating: number, comment?: string) => {
       const state = get();
+      let targetTicket: Ticket | undefined;
       const updated = state.tickets.map((t) => {
         if (t.id === ticketId) {
-          return {
+          targetTicket = {
             ...t,
             feedbackRating: rating,
             feedbackComment: comment,
           };
+          return targetTicket;
         }
         return t;
       });
@@ -613,6 +631,10 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       set({ tickets: updated });
       persist(updated);
       broadcastSync(updated);
+
+      if (targetTicket) {
+        syncService.pushTicketUpdate(ticketId, targetTicket).catch(() => {});
+      }
     },
 
     setFilters: (newFilters) => {

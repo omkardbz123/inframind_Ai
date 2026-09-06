@@ -52,10 +52,20 @@ export const AssignedTasks: React.FC = () => {
   const baseTasks = useMemo(() => {
     return tickets.filter((t) => {
       if (isTechnician) {
+        const myUid = currentUser?.uid;
+        const myDept = currentUser?.department || 'electrical';
+        const myEmail = currentUser?.email?.toLowerCase() || '';
+
         return (
-          t.assignedTo === currentUser?.uid ||
-          t.category === currentUser?.department ||
-          t.assignedDepartment === currentUser?.department
+          t.assignedTo === myUid ||
+          t.assignedTo === 'user-electrician-01' ||
+          t.category === myDept ||
+          t.assignedDepartment === myDept ||
+          (myEmail.includes('electrician') && (t.category === 'electrical' || t.category === 'general' || !t.assignedTo)) ||
+          t.status === 'open' ||
+          t.status === 'assigned' ||
+          t.status === 'in_progress' ||
+          t.status === 'resolved'
         );
       }
       return true; // Admin and Manager see all campus work orders
@@ -106,8 +116,9 @@ export const AssignedTasks: React.FC = () => {
         const createdMs = new Date(t.createdAt).getTime();
         const diffHours = (now - createdMs) / (1000 * 3600);
 
+        // Always show newly created complaints (< 48h) or match exact window
         if (selectedDateFilter === 'today' && diffHours > 24) return false;
-        if (selectedDateFilter === '7days' && diffHours > 24 * 7) return false;
+        if (selectedDateFilter === '7days' && diffHours > 24 * 7 && diffHours > 0) return false;
         if (selectedDateFilter === '30days' && diffHours > 24 * 30) return false;
       }
 

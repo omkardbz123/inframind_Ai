@@ -14,6 +14,8 @@ import {
   Wrench,
   Sparkles,
   X,
+  Workflow,
+  Code2,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTicketStore } from '../../store/ticketStore';
@@ -116,6 +118,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       label: 'Campus Directory',
       icon: Users,
       roles: ['admin', 'manager'],
+    },
+    {
+      to: '/workflow',
+      label: 'System Workflows',
+      icon: Workflow,
+      badge: 'Diagrams',
+      badgeColor: 'bg-rose-50 text-rose-800 border-rose-200',
+      roles: ['student', 'teacher', 'admin', 'manager', 'employee'],
+    },
+    {
+      to: '/technicality',
+      label: 'Technical Specs',
+      icon: Code2,
+      badge: 'v2.5',
+      badgeColor: 'bg-amber-50 text-amber-800 border-amber-200',
+      roles: ['student', 'teacher', 'admin', 'manager', 'employee'],
     },
   ];
 
