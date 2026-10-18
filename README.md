@@ -23,6 +23,19 @@
 
 </div>
 
+
+## 📸 Application Screenshots
+
+### Student Portal — AI-Assisted Incident Reporting
+![MIT ACSC CampusCare student portal showing AI-assisted complaint reporting and ongoing maintenance tickets](screenshots/student-dashboard.jpg)
+
+### Automated Work Order Closure
+![CampusCare work order resolution email with technician notes and closure record](screenshots/resolved-work-order.jpg)
+
+### Predictive Asset Maintenance
+![InfraMind AI asset maintenance table showing equipment history, risk scores, and preventive action controls](screenshots/predictive-maintenance.jpg)
+
+
 ## 📌 Table of Contents
 - [Executive Overview](#-executive-overview)
 - [The Problem vs. InfraMind AI Solution](#-the-problem-vs-inframind-ai-solution)
